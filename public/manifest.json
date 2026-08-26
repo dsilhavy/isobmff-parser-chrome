@@ -1,0 +1,7 @@
+{
+  "manifest_version": 3,
+  "name": "ISOBMFF Box Inspector",
+  "version": "0.1.0",
+  "description": "Parses the ISOBMFF box structure of media segments downloaded by media players (dash.js, hls.js, ...)",
+  "devtools_page": "devtools.html"
+}

@@ -1,0 +1,23 @@
+{
+  "name": "isobmff-parser-chrome",
+  "version": "0.1.0",
+  "description": "Chrome DevTools panel that parses the ISOBMFF box structure of media segments",
+  "main": "index.js",
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite build --watch",
+    "test": "tsx --test test/sniff.test.ts"
+  },
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "@svta/cml-iso-bmff": "^1.0.5"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.2.7",
+    "@types/node": "^26.3.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  }
+}
