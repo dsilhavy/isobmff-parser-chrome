@@ -1,41 +1,48 @@
 import type { Segment } from '../capture';
+import type { Group, SegmentMeta } from '../list-model';
+import { stripCommonPrefix } from '../timeline-model';
+import { basename, chip, clock, el } from './util';
 
-function kind(segment: Segment): string {
-  const types = new Set(segment.boxes.map((b) => b.type));
-  if (types.has('moov')) return 'init';
-  if (types.has('moof')) return 'media';
-  return segment.boxes[0]?.type ?? 'error';
+function row(segment: Segment, meta: SegmentMeta | undefined, selected: boolean, onSelect: (s: Segment) => void): HTMLElement {
+  const r = el('div', 'seg-row');
+  if (selected) r.classList.add('selected');
+  r.title = segment.url + (segment.error ? `\nparse error: ${segment.error}` : '');
+  const kind = meta?.kind ?? 'error';
+  r.append(el('span', `badge ${kind}`, kind), el('span', 'seg-name', basename(segment.url)));
+  if (segment.error) r.appendChild(el('span', 'seg-error', '!'));
+  else r.appendChild(el('span', `seg-dot ${meta?.issue ?? ''}`));
+  r.append(
+    el('span', 'seg-size', segment.bytes.byteLength.toLocaleString()),
+    el('span', 'seg-time', clock(segment.time)),
+  );
+  r.addEventListener('click', () => onSelect(segment));
+  return r;
 }
 
 export function renderList(
   container: HTMLElement,
-  segments: Segment[],
+  groups: Group[],
+  meta: Map<Segment, SegmentMeta>,
   selected: Segment | null,
+  collapsed: Set<string>,
   onSelect: (segment: Segment) => void,
+  onToggle: (template: string) => void,
 ): void {
+  const names = stripCommonPrefix(groups.map((g) => g.template));
   container.replaceChildren(
-    ...segments.map((segment) => {
-      const li = document.createElement('li');
-      if (segment === selected) li.classList.add('selected');
-
-      const badge = document.createElement('span');
-      const k = kind(segment);
-      badge.className = `badge ${k}`;
-      badge.textContent = k;
-      li.appendChild(badge);
-
-      li.append(segment.url.split('/').pop()?.split('?')[0] || segment.url);
-
-      const meta = document.createElement('span');
-      meta.className = 'meta';
-      meta.textContent = `${segment.time.toLocaleTimeString()} · ${segment.bytes.byteLength.toLocaleString()} B` +
-        (segment.error ? ` · parse error: ${segment.error}` : '');
-      meta.title = segment.url;
-      li.appendChild(meta);
-
-      li.title = segment.url;
-      li.addEventListener('click', () => onSelect(segment));
-      return li;
+    ...groups.flatMap((g, gi) => {
+      const head = el('div', 'seg-group');
+      if (collapsed.has(g.template)) head.classList.add('collapsed');
+      head.title = g.template;
+      head.append(
+        el('span', 'tl-caret'),
+        chip(g.handler),
+        el('span', 'seg-group-name', names[gi]),
+        el('span', 'seg-group-meta', `${g.segments.length} · ${g.size.toLocaleString()} B`),
+      );
+      head.addEventListener('click', () => onToggle(g.template));
+      const rows = collapsed.has(g.template) ? [] : g.segments.map((s) => row(s, meta.get(s), s === selected, onSelect));
+      return [head, ...rows];
     }),
   );
 }
