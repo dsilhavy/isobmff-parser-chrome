@@ -5,7 +5,8 @@ import { renderTree } from './render/tree';
 import { renderFields } from './render/fields';
 import { renderHex } from './render/hex';
 import { renderTimeline } from './render/timeline';
-import { analyze } from './continuity';
+import { analyze, type Lane } from './continuity';
+import { fieldOffsets } from './field-model';
 import { groupSegments, matches, metaOf, type KindFilter } from './list-model';
 import { saveAll } from './save';
 
@@ -30,11 +31,21 @@ let selected: Segment | null = null;
 let filter = '';
 let kindFilter: KindFilter = 'all';
 const collapsedGroups = new Set<string>();
+let lanes: Lane[] = [];
+
+/** Timescale for the time fields of `box`: its own `timescale` field, else the one lane timescale this segment belongs to. */
+function timescaleFor(segment: Segment, box: ParsedIsoBox): number | undefined {
+  const own = (box as { timescale?: unknown }).timescale;
+  if (typeof own === 'number') return own;
+  const scales = new Set(lanes.filter((l) => l.spans.some((s) => s.segment === segment)).map((l) => l.timescale));
+  return scales.size === 1 ? [...scales][0] : undefined;
+}
 
 function selectBox(segment: Segment, box: ParsedIsoBox): void {
   renderTree(treeEl, segment, box, (b) => selectBox(segment, b));
-  renderFields(fieldsEl, box);
-  renderHex(hexEl, segment.bytes, box.view.byteOffset, box.size);
+  const ranges = fieldOffsets(box);
+  renderFields(fieldsEl, box, timescaleFor(segment, box), ranges);
+  renderHex(hexEl, segment.bytes, box.view.byteOffset, box.size, ranges);
 }
 
 /** Depth-first search for the first box of `type`. */
@@ -48,7 +59,7 @@ function findBox(boxes: ParsedIsoBox[], type: string): ParsedIsoBox | undefined 
 }
 
 function refresh(): void {
-  const lanes = analyze(segments);
+  lanes = analyze(segments);
   const meta = metaOf(segments, lanes);
   const visible = segments.filter((s) => matches(s, meta.get(s)!, filter, kindFilter));
   countEl.textContent = `${segments.length} segment${segments.length === 1 ? '' : 's'} · ${lanes.length} track${lanes.length === 1 ? '' : 's'}`;
