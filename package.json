@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
-    "test": "tsx --test test/sniff.test.ts"
+    "test": "tsx --test test/*.test.ts"
   },
   "private": true,
   "type": "module",

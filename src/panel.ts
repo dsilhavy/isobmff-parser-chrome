@@ -4,6 +4,9 @@ import { renderList } from './render/list';
 import { renderTree } from './render/tree';
 import { renderFields } from './render/fields';
 import { renderHex } from './render/hex';
+import { renderTimeline } from './render/timeline';
+import { analyze } from './continuity';
+import { saveAll } from './save';
 
 const MAX_SEGMENTS = 200; // ponytail: fixed FIFO cap, make configurable if sessions need more
 
@@ -14,6 +17,10 @@ const fieldsEl = $('fields');
 const hexEl = $('hex');
 const countEl = $('count');
 const emptyEl = $('empty');
+const statusEl = $('status');
+const saveEl = $('save') as HTMLButtonElement;
+const timelineEl = $('timeline');
+const timelineSummaryEl = $('timeline-summary');
 
 const segments: Segment[] = [];
 let selected: Segment | null = null;
@@ -26,6 +33,7 @@ function selectBox(segment: Segment, box: ParsedIsoBox): void {
 function selectSegment(segment: Segment): void {
   selected = segment;
   renderList(listEl, segments, selected, selectSegment);
+  renderTimeline(timelineEl, timelineSummaryEl, analyze(segments), selected, selectSegment);
   renderTree(treeEl, segment.boxes, (box) => selectBox(segment, box));
   fieldsEl.replaceChildren();
   hexEl.replaceChildren();
@@ -34,7 +42,9 @@ function selectSegment(segment: Segment): void {
 function refresh(): void {
   countEl.textContent = `${segments.length} segment${segments.length === 1 ? '' : 's'}`;
   emptyEl.style.display = segments.length ? 'none' : '';
+  saveEl.disabled = segments.length === 0;
   renderList(listEl, segments, selected, selectSegment);
+  renderTimeline(timelineEl, timelineSummaryEl, analyze(segments), selected, selectSegment);
 }
 
 startCapture((segment) => {
@@ -46,9 +56,22 @@ startCapture((segment) => {
   refresh();
 });
 
+saveEl.addEventListener('click', async () => {
+  saveEl.disabled = true;
+  statusEl.textContent = 'saving…';
+  try {
+    statusEl.textContent = await saveAll(segments);
+  } catch (e) {
+    statusEl.textContent = `save failed: ${e instanceof Error ? e.message : String(e)}`;
+  } finally {
+    saveEl.disabled = segments.length === 0;
+  }
+});
+
 $('clear').addEventListener('click', () => {
   segments.length = 0;
   selected = null;
+  statusEl.textContent = '';
   treeEl.replaceChildren();
   fieldsEl.replaceChildren();
   hexEl.replaceChildren();

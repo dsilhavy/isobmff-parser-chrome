@@ -9,7 +9,9 @@
     <header>
       <strong>ISOBMFF Box Inspector</strong>
       <span id="count">0 segments</span>
+      <button id="save">Save all</button>
       <button id="clear">Clear</button>
+      <span id="status"></span>
     </header>
     <main>
       <section id="segments-pane">
@@ -22,5 +24,9 @@
         <div id="hex"></div>
       </section>
     </main>
+    <details id="timeline-pane" open>
+      <summary id="timeline-summary">Timeline · 0 lanes · 0 issues</summary>
+      <div id="timeline"></div>
+    </details>
   </body>
 </html>
