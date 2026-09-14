@@ -23,7 +23,9 @@ npm run build
 
 1. Open DevTools on a page that plays media (e.g. the [dash.js reference player](https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/))
 2. Switch to the **ISOBMFF** panel
-3. Play the stream — init and media segments appear as they are downloaded
+3. Play the stream — init and media segments appear as they are downloaded, grouped by URL template
+
+The header filter matches URL substrings and the keywords `track:N`, `init`, `media`, `gap`, `overlap` and handler codes (`vide`, `soun`, …). The timeline at the bottom shows one lane per track with a seconds ruler, gap/overlap markers and a playhead; hover a bar for details, click to select, ⇧click to open its `tfdt`. `⌥`+wheel zooms, drag pans, double-click resets, `[` / `]` step through issues. In the fields pane, hovering a row highlights its bytes in the hex view and clicking a byte selects the field that covers it (for boxes with a field map: `ftyp`/`styp`, `mvhd`, `tkhd`, `mdhd`, `hdlr`, `trex`, `elst`, `mfhd`, `tfhd`, `tfdt`, `trun`, `sidx`, `emsg`).
 
 Only requests made while DevTools is open are captured (a limitation of the `chrome.devtools.network` API). The panel keeps the last 200 segments.
 
@@ -31,5 +33,5 @@ Only requests made while DevTools is open are captured (a limitation of the `chr
 
 ```bash
 npm run dev    # rebuild on change; reload the extension + DevTools to pick it up
-npm test       # sniffer unit tests
+npm test       # unit tests (sniffer, continuity, timeline/list/field models, zip)
 ```
