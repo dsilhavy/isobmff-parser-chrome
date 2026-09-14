@@ -9,13 +9,18 @@
     <header>
       <strong>ISOBMFF Box Inspector</strong>
       <span id="count">0 segments</span>
+      <span class="divider"></span>
+      <label class="filter"><span class="filter-icon">⌕</span><input id="filter" type="search" placeholder="Filter · name, url, track…" spellcheck="false" /></label>
+      <span class="seg" id="kind">
+        <button data-kind="all" class="selected">All</button><button data-kind="init">init</button><button data-kind="media">media</button><button data-kind="issues">issues</button>
+      </span>
+      <span id="status"></span>
       <button id="save">Save all</button>
       <button id="clear">Clear</button>
-      <span id="status"></span>
     </header>
     <main>
       <section id="segments-pane">
-        <ul id="segments"></ul>
+        <div id="segments"></div>
         <p id="empty">Waiting for media segments… (only requests made while DevTools is open are captured)</p>
       </section>
       <section id="tree-pane"><div id="tree"></div></section>

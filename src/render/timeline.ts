@@ -1,6 +1,7 @@
 import type { Segment } from '../capture';
 import type { Lane, Span } from '../continuity';
 import { groupDigits, issuesOf, rulerStep, stripCommonPrefix, type Issue, type IssueKind } from '../timeline-model';
+import { basename, chip, clock, el } from './util';
 
 export type SelectSegment = (segment: Segment, openTfdt?: boolean) => void;
 
@@ -34,28 +35,12 @@ let hoverTimer = 0;
 let card: HTMLElement | null = null;
 let dragged = false;
 
-const basename = (url: string) => url.split('/').pop()?.split('?')[0] || url;
-const el = <K extends keyof HTMLElementTagNameMap>(tag: K, className?: string, text?: string) => {
-  const e = document.createElement(tag);
-  if (className) e.className = className;
-  if (text !== undefined) e.textContent = text;
-  return e;
-};
-
-const chipOf = (handler: string | undefined): [letter: string, cls: string] => {
-  if (handler === 'soun') return ['A', 'audio'];
-  if (handler === 'vide') return ['V', 'video'];
-  if (handler === 'text' || handler === 'subt' || handler === 'sbtl') return ['T', 'text'];
-  return [handler?.[0]?.toUpperCase() ?? '?', 'other'];
-};
 const rate = (ts: number | undefined) => (ts === undefined ? '' : ts % 1000 === 0 ? `${ts / 1000} kHz` : `${ts} Hz`);
 const fmtMs = (secs: number, decimals = 0) => {
   const ms = Math.abs(secs) * 1000;
   return `${secs > 0 ? '+' : '−'}${ms.toFixed(ms < 1 ? 1 : decimals)} ms`;
 };
 const fmtSecs = (s: number, step: number) => s.toFixed(step < 0.1 ? 2 : step < 1 ? 1 : 0);
-const pad2 = (n: number) => String(n).padStart(2, '0');
-const clock = (d: Date) => `${pad2(d.getHours())}:${pad2(d.getMinutes())}:${pad2(d.getSeconds())}`;
 
 const pct = (v: View, t: number) => `${((t - v.visMin) / v.visSpan) * 100}%`;
 const width = (v: View, secs: number) => `${(secs / v.visSpan) * 100}%`;
@@ -72,8 +57,7 @@ function estimateDuration(lane: Lane, i: number, step: number): number {
 function laneLabel(lane: Lane, short: string): HTMLElement {
   const label = el('div', 'lane-label');
   label.title = `${lane.template} · track ${lane.trackId}`;
-  const [letter, cls] = chipOf(lane.handler);
-  label.append(el('span', `chip ${cls}`, letter), el('span', 'lane-name', short), el('span', 'lane-rate', rate(lane.timescale)));
+  label.append(chip(lane.handler), el('span', 'lane-name', short), el('span', 'lane-rate', rate(lane.timescale)));
   return label;
 }
 

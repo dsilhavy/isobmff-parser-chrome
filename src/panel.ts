@@ -6,6 +6,7 @@ import { renderFields } from './render/fields';
 import { renderHex } from './render/hex';
 import { renderTimeline } from './render/timeline';
 import { analyze } from './continuity';
+import { groupSegments, matches, metaOf, type KindFilter } from './list-model';
 import { saveAll } from './save';
 
 const MAX_SEGMENTS = 200; // ponytail: fixed FIFO cap, make configurable if sessions need more
@@ -19,11 +20,16 @@ const countEl = $('count');
 const emptyEl = $('empty');
 const statusEl = $('status');
 const saveEl = $('save') as HTMLButtonElement;
+const filterEl = $('filter') as HTMLInputElement;
+const kindEl = $('kind');
 const timelineEl = $('timeline');
 const timelineSummaryEl = $('timeline-summary');
 
 const segments: Segment[] = [];
 let selected: Segment | null = null;
+let filter = '';
+let kindFilter: KindFilter = 'all';
+const collapsedGroups = new Set<string>();
 
 function selectBox(segment: Segment, box: ParsedIsoBox): void {
   renderFields(fieldsEl, box);
@@ -40,10 +46,26 @@ function findBox(boxes: ParsedIsoBox[], type: string): ParsedIsoBox | undefined 
   return undefined;
 }
 
+function refresh(): void {
+  const lanes = analyze(segments);
+  const meta = metaOf(segments, lanes);
+  const visible = segments.filter((s) => matches(s, meta.get(s)!, filter, kindFilter));
+  countEl.textContent = `${segments.length} segment${segments.length === 1 ? '' : 's'} · ${lanes.length} track${lanes.length === 1 ? '' : 's'}`;
+  emptyEl.textContent = segments.length
+    ? 'No segments match the filter.'
+    : 'Waiting for media segments… (only requests made while DevTools is open are captured)';
+  emptyEl.style.display = visible.length ? 'none' : '';
+  saveEl.disabled = segments.length === 0;
+  renderList(listEl, groupSegments(visible, meta), meta, selected, collapsedGroups, selectSegment, (template) => {
+    if (!collapsedGroups.delete(template)) collapsedGroups.add(template);
+    refresh();
+  });
+  renderTimeline(timelineEl, timelineSummaryEl, lanes, selected, selectSegment);
+}
+
 function selectSegment(segment: Segment, openTfdt = false): void {
   selected = segment;
-  renderList(listEl, segments, selected, selectSegment);
-  renderTimeline(timelineEl, timelineSummaryEl, analyze(segments), selected, selectSegment);
+  refresh();
   renderTree(treeEl, segment.boxes, (box) => selectBox(segment, box));
   fieldsEl.replaceChildren();
   hexEl.replaceChildren();
@@ -52,20 +74,25 @@ function selectSegment(segment: Segment, openTfdt = false): void {
   if (tfdt) selectBox(segment, tfdt);
 }
 
-function refresh(): void {
-  countEl.textContent = `${segments.length} segment${segments.length === 1 ? '' : 's'}`;
-  emptyEl.style.display = segments.length ? 'none' : '';
-  saveEl.disabled = segments.length === 0;
-  renderList(listEl, segments, selected, selectSegment);
-  renderTimeline(timelineEl, timelineSummaryEl, analyze(segments), selected, selectSegment);
-}
-
 startCapture((segment) => {
   segments.push(segment);
   if (segments.length > MAX_SEGMENTS) {
     const dropped = segments.splice(0, segments.length - MAX_SEGMENTS);
     if (selected && dropped.includes(selected)) selected = null;
   }
+  refresh();
+});
+
+filterEl.addEventListener('input', () => {
+  filter = filterEl.value;
+  refresh();
+});
+
+kindEl.addEventListener('click', (e) => {
+  const b = (e.target as HTMLElement).closest<HTMLElement>('button[data-kind]');
+  if (!b) return;
+  kindFilter = b.dataset.kind as KindFilter;
+  kindEl.querySelectorAll('button').forEach((x) => x.classList.toggle('selected', x === b));
   refresh();
 });
 

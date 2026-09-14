@@ -30,13 +30,76 @@ body {
 header {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 6px 10px;
+  gap: 8px;
+  height: 30px;
+  padding: 0 10px;
   border-bottom: 1px solid var(--border);
   flex: none;
+  white-space: nowrap;
 }
 
 #count { color: var(--muted); }
+.divider { width: 1px; height: 16px; background: var(--border); margin: 0 4px; }
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  width: 240px;
+  padding: 0 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: light-dark(#fff, #1e1e1e);
+  color: var(--muted);
+}
+.filter-icon { font-size: 11px; }
+#filter {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  color: CanvasText;
+}
+#filter::-webkit-search-cancel-button { -webkit-appearance: none; }
+
+.seg {
+  display: flex;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+  font-size: 11px;
+}
+.seg button {
+  font: inherit;
+  padding: 0 8px;
+  line-height: 18px;
+  border: 0;
+  border-left: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.seg button:first-child { border-left: 0; }
+.seg button:hover { background: var(--hover); }
+.seg button.selected { background: var(--selected); }
+.seg button[data-kind="issues"] { color: var(--bad); }
+
+header > button {
+  font: inherit;
+  height: 20px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: light-dark(#f8f8f8, #2b2b2b);
+  color: inherit;
+  cursor: pointer;
+}
+header > button:disabled { opacity: .5; cursor: default; }
+#status { color: var(--muted); margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
 
 main {
   flex: 1;
@@ -48,33 +111,67 @@ main {
 main > section {
   overflow: auto;
   border-right: 1px solid var(--border);
-  padding: 4px;
+  position: relative;
 }
+main > section:last-child { border-right: 0; }
 
-#segments { list-style: none; margin: 0; padding: 0; }
-
-#segments li {
-  padding: 4px 6px;
-  cursor: pointer;
+/* ---------- segment list ---------- */
+.seg-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  background: var(--surface-2);
   border-bottom: 1px solid var(--border);
-  word-break: break-all;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
 }
-#segments li:hover { background: var(--hover); }
-#segments li.selected { background: var(--selected); }
+.seg-group.collapsed .tl-caret { transform: rotate(-90deg); }
+.seg-group-name {
+  color: CanvasText;
+  font: 11px ui-monospace, monospace;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.seg-group-meta { margin-left: auto; flex: none; font-size: 11px; }
 
-#segments .meta { color: var(--muted); display: block; }
+.seg-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 20px;
+  padding: 0 8px 0 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.seg-row:hover { background: var(--hover); }
+.seg-row.selected { background: var(--selected); }
+.seg-name { overflow: hidden; text-overflow: ellipsis; }
+.seg-dot { flex: none; width: 6px; height: 6px; border-radius: 3px; margin-left: auto; }
+.seg-dot.gap { background: var(--bad); }
+.seg-dot.overlap { background: var(--warn); }
+.seg-error { margin-left: auto; color: var(--bad); font-weight: 700; }
+.seg-size { flex: none; width: 72px; text-align: right; font: 11px ui-monospace, monospace; }
+.seg-time { flex: none; width: 50px; text-align: right; font-size: 11px; color: var(--muted); }
 
 .badge {
+  flex: none;
   display: inline-block;
   padding: 0 5px;
   border-radius: 6px;
   font-size: 10px;
+  line-height: 14px;
   color: #fff;
   background: var(--muted);
-  margin-right: 4px;
 }
-.badge.init { background: #7b1fa2; }
-.badge.media { background: #2e7d32; }
+.badge.init { background: var(--chip-video); }
+.badge.media { background: var(--ok); }
 
 #empty { color: var(--muted); padding: 8px; }
 
@@ -108,10 +205,6 @@ main > section {
   margin: 4px 0;
   white-space: pre;
 }
-
-button { font: inherit; }
-
-#status { color: var(--muted); margin-left: auto; }
 
 /* ---------- shared chips ---------- */
 .chip {
