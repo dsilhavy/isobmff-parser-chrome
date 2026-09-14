@@ -30,13 +30,26 @@ function selectBox(segment: Segment, box: ParsedIsoBox): void {
   renderHex(hexEl, segment.bytes, box.view.byteOffset, box.size);
 }
 
-function selectSegment(segment: Segment): void {
+/** Depth-first search for the first box of `type`. */
+function findBox(boxes: ParsedIsoBox[], type: string): ParsedIsoBox | undefined {
+  for (const b of boxes) {
+    if (b.type === type) return b;
+    const hit = findBox((b as { boxes?: ParsedIsoBox[] }).boxes ?? [], type);
+    if (hit) return hit;
+  }
+  return undefined;
+}
+
+function selectSegment(segment: Segment, openTfdt = false): void {
   selected = segment;
   renderList(listEl, segments, selected, selectSegment);
   renderTimeline(timelineEl, timelineSummaryEl, analyze(segments), selected, selectSegment);
   renderTree(treeEl, segment.boxes, (box) => selectBox(segment, box));
   fieldsEl.replaceChildren();
   hexEl.replaceChildren();
+  listEl.querySelector('.selected')?.scrollIntoView({ block: 'nearest' });
+  const tfdt = openTfdt ? findBox(segment.boxes, 'tfdt') : undefined;
+  if (tfdt) selectBox(segment, tfdt);
 }
 
 function refresh(): void {
