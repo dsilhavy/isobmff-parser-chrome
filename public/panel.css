@@ -175,19 +175,56 @@ main > section:last-child { border-right: 0; }
 
 #empty { color: var(--muted); padding: 8px; }
 
-#tree details { padding-left: 12px; }
-#tree > details, #tree > .leaf { padding-left: 0; }
-#tree .leaf { padding-left: 26px; }
-
-.box-label {
-  cursor: pointer;
-  padding: 1px 4px;
-  border-radius: 3px;
-  font-family: ui-monospace, monospace;
+/* ---------- pane headers ---------- */
+.pane-head {
+  height: 22px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: Canvas;
+  z-index: 1;
 }
-.box-label:hover { background: var(--hover); }
-.box-label.selected { background: var(--selected); }
-.box-label .size { color: var(--muted); }
+.pane-head .mono { font-family: ui-monospace, monospace; color: CanvasText; overflow: hidden; text-overflow: ellipsis; }
+.tree-collapse-all {
+  margin-left: auto;
+  font: inherit;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  padding: 0;
+}
+.tree-collapse-all:hover { color: CanvasText; }
+
+/* ---------- box tree ---------- */
+#tree { outline: none; --guide: light-dark(#ddd, #3a3a3a); }
+.tree-row {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  padding-right: 8px;
+  cursor: pointer;
+  font: 11px ui-monospace, monospace;
+  white-space: nowrap;
+}
+.tree-row:hover { background-color: var(--hover); }
+.tree-row.selected { background-color: var(--selected); }
+.tree-caret { width: 14px; flex: none; color: var(--muted); font-size: 9px; }
+.tree-desc {
+  color: var(--muted);
+  font: 11px system-ui, sans-serif;
+  margin-left: 8px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tree-size { margin-left: auto; color: var(--muted); flex: none; padding-left: 8px; }
 
 #fields table { border-collapse: collapse; margin: 4px 0; }
 #fields td, #fields th {

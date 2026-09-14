@@ -1,0 +1,33 @@
+/** Human-readable box names, ISO/IEC 14496-12 (plus a few common DASH/CMAF/codec boxes). */
+const NAMES: Record<string, string> = {
+  ftyp: 'File Type', styp: 'Segment Type', free: 'Free Space', skip: 'Free Space', pdin: 'Progressive Download Info',
+  moov: 'Movie', mvhd: 'Movie Header', trak: 'Track', tkhd: 'Track Header', tref: 'Track Reference', trgr: 'Track Group',
+  edts: 'Edit', elst: 'Edit List', mdia: 'Media', mdhd: 'Media Header', hdlr: 'Handler Reference', elng: 'Extended Language',
+  minf: 'Media Information', vmhd: 'Video Media Header', smhd: 'Sound Media Header', hmhd: 'Hint Media Header',
+  sthd: 'Subtitle Media Header', nmhd: 'Null Media Header', dinf: 'Data Information', dref: 'Data Reference',
+  'url ': 'Data Entry URL', 'urn ': 'Data Entry URN', stbl: 'Sample Table', stsd: 'Sample Description',
+  stts: 'Decoding Time to Sample', ctts: 'Composition Time to Sample', cslg: 'Composition to Decode',
+  stsc: 'Sample to Chunk', stsz: 'Sample Size', stz2: 'Compact Sample Size', stco: 'Chunk Offset', co64: 'Chunk Offset (64-bit)',
+  stss: 'Sync Sample', stsh: 'Shadow Sync Sample', padb: 'Padding Bits', stdp: 'Degradation Priority',
+  sdtp: 'Independent and Disposable Samples', sbgp: 'Sample to Group', sgpd: 'Sample Group Description',
+  subs: 'Sub-Sample Information', saiz: 'Sample Auxiliary Information Sizes', saio: 'Sample Auxiliary Information Offsets',
+  udta: 'User Data', mvex: 'Movie Extends', mehd: 'Movie Extends Header', trex: 'Track Extends', leva: 'Level Assignment',
+  moof: 'Movie Fragment', mfhd: 'Movie Fragment Header', traf: 'Track Fragment', tfhd: 'Track Fragment Header',
+  trun: 'Track Fragment Run', tfdt: 'Track Fragment Decode Time', mfra: 'Movie Fragment Random Access',
+  tfra: 'Track Fragment Random Access', mfro: 'Movie Fragment Random Access Offset', mdat: 'Media Data',
+  meta: 'Metadata', xml: 'XML', bxml: 'Binary XML', iloc: 'Item Location', pitm: 'Primary Item', ipro: 'Item Protection',
+  iinf: 'Item Information', infe: 'Item Info Entry', idat: 'Item Data', iref: 'Item Reference',
+  sidx: 'Segment Index', ssix: 'Subsegment Index', prft: 'Producer Reference Time', emsg: 'Event Message',
+  sinf: 'Protection Scheme Information', frma: 'Original Format', schm: 'Scheme Type', schi: 'Scheme Information',
+  tenc: 'Track Encryption', senc: 'Sample Encryption', pssh: 'Protection System Specific Header',
+  avc1: 'AVC Sample Entry', avc3: 'AVC Sample Entry (in-band)', avcC: 'AVC Configuration', hvc1: 'HEVC Sample Entry',
+  hev1: 'HEVC Sample Entry (in-band)', hvcC: 'HEVC Configuration', vp09: 'VP9 Sample Entry', vpcC: 'VP Codec Configuration',
+  av01: 'AV1 Sample Entry', av1C: 'AV1 Codec Configuration', mp4a: 'MPEG-4 Audio Sample Entry', esds: 'Elementary Stream Descriptor',
+  'ac-3': 'AC-3 Sample Entry', dac3: 'AC-3 Specific', 'ec-3': 'E-AC-3 Sample Entry', dec3: 'E-AC-3 Specific',
+  Opus: 'Opus Sample Entry', dOps: 'Opus Specific', fLaC: 'FLAC Sample Entry', dfLa: 'FLAC Specific',
+  stpp: 'XML Subtitle Sample Entry', wvtt: 'WebVTT Sample Entry', vttC: 'WebVTT Configuration',
+  btrt: 'Bit Rate', pasp: 'Pixel Aspect Ratio', colr: 'Colour Information', clap: 'Clean Aperture',
+  uuid: 'User Extension', kind: 'Track Kind', ilst: 'Item List',
+};
+
+export const boxName = (type: string): string | undefined => NAMES[type];

@@ -32,6 +32,7 @@ let kindFilter: KindFilter = 'all';
 const collapsedGroups = new Set<string>();
 
 function selectBox(segment: Segment, box: ParsedIsoBox): void {
+  renderTree(treeEl, segment, box, (b) => selectBox(segment, b));
   renderFields(fieldsEl, box);
   renderHex(hexEl, segment.bytes, box.view.byteOffset, box.size);
 }
@@ -66,7 +67,7 @@ function refresh(): void {
 function selectSegment(segment: Segment, openTfdt = false): void {
   selected = segment;
   refresh();
-  renderTree(treeEl, segment.boxes, (box) => selectBox(segment, box));
+  renderTree(treeEl, segment, null, (box) => selectBox(segment, box));
   fieldsEl.replaceChildren();
   hexEl.replaceChildren();
   listEl.querySelector('.selected')?.scrollIntoView({ block: 'nearest' });
