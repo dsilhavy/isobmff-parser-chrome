@@ -6,10 +6,13 @@ import { basename, chip, clock, el } from './util';
 function row(segment: Segment, meta: SegmentMeta | undefined, selected: boolean, onSelect: (s: Segment) => void): HTMLElement {
   const r = el('div', 'seg-row');
   if (selected) r.classList.add('selected');
-  r.title = segment.url + (segment.error ? `\nparse error: ${segment.error}` : '');
+  const warnings = meta?.warnings ?? [];
+  r.title = [segment.url, ...warnings].join('\n');
   const kind = meta?.kind ?? 'error';
-  r.append(el('span', `badge ${kind}`, kind), el('span', 'seg-name', basename(segment.url)));
-  if (segment.error) r.appendChild(el('span', 'seg-error', '!'));
+  r.append(el('span', `badge ${kind}`, kind));
+  if (meta?.encrypted) r.appendChild(el('span', 'badge enc', 'enc'));
+  r.appendChild(el('span', 'seg-name', basename(segment.url)));
+  if (warnings.length) r.appendChild(el('span', 'seg-error', '!'));
   else r.appendChild(el('span', `seg-dot ${meta?.issue ?? ''}`));
   r.append(
     el('span', 'seg-size', segment.bytes.byteLength.toLocaleString()),
@@ -38,7 +41,7 @@ export function renderList(
         el('span', 'tl-caret'),
         chip(g.handler),
         el('span', 'seg-group-name', names[gi]),
-        el('span', 'seg-group-meta', `${g.segments.length} · ${g.size.toLocaleString()} B`),
+        el('span', 'seg-group-meta', `${g.codec ? `${g.codec} · ` : ''}${g.segments.length} · ${g.size.toLocaleString()} B`),
       );
       head.addEventListener('click', () => onToggle(g.template));
       const rows = collapsed.has(g.template) ? [] : g.segments.map((s) => row(s, meta.get(s), s === selected, onSelect));

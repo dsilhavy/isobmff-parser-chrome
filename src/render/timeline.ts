@@ -1,9 +1,10 @@
 import type { Segment } from '../capture';
 import type { Lane, Span } from '../continuity';
-import { groupDigits, issuesOf, rulerStep, stripCommonPrefix, type Issue, type IssueKind } from '../timeline-model';
+import { AV_WARN_SECS, avOffset, eventsOf, groupDigits, issuesOf, ntpToDate, rulerStep, stripCommonPrefix, type Event, type Issue, type IssueKind } from '../timeline-model';
 import { basename, chip, clock, el } from './util';
 
-export type SelectSegment = (segment: Segment, openTfdt?: boolean) => void;
+/** `open`: type of the box to select after the segment (e.g. 'tfdt', 'emsg'). */
+export type SelectSegment = (segment: Segment, open?: string) => void;
 
 interface View {
   lanes: Lane[];
@@ -14,6 +15,7 @@ interface View {
   visSpan: number;
   step: number;
   issues: Issue[];
+  events: Event[];
   selected: Segment | null;
   onSelect: SelectSegment;
   container: HTMLElement;
@@ -24,6 +26,8 @@ const MIN_ZOOM = 1;
 const MAX_ZOOM = 200;
 const HOVER_DELAY = 150;
 const LABEL_MIN_GAP = 44; // px between issue labels before the smaller one hides
+const SYNC_MIN_PX = 4; // per sync tick; denser bars hide the ticks
+const ISSUE_KINDS: IssueKind[] = ['gap', 'overlap', 'nosync', 'unknown'];
 
 // ponytail: module-level state; the panel has exactly one timeline
 let zoom = 1;
@@ -56,7 +60,7 @@ function estimateDuration(lane: Lane, i: number, step: number): number {
 
 function laneLabel(lane: Lane, short: string): HTMLElement {
   const label = el('div', 'lane-label');
-  label.title = `${lane.template} · track ${lane.trackId}`;
+  label.title = `${lane.template} · track ${lane.trackId}${lane.codec ? ` · ${lane.codec}` : ''}`;
   label.append(chip(lane.handler), el('span', 'lane-name', short), el('span', 'lane-rate', rate(lane.timescale)));
   return label;
 }
@@ -81,6 +85,13 @@ function renderLane(v: View, lane: Lane, short: string): HTMLElement {
     if (s.duration === undefined) bar.classList.add('unknown');
     bar.style.left = pct(v, toSecs(s.start));
     bar.style.width = width(v, dur);
+    if (ts && s.syncOffsets?.length && (dur / v.visSpan) * trackWidth(v) / s.syncOffsets.length >= SYNC_MIN_PX) {
+      for (const off of s.syncOffsets) {
+        const tick = el('span', 'sync');
+        tick.style.left = `${(off / ts / dur) * 100}%`;
+        bar.appendChild(tick);
+      }
+    }
     track.appendChild(bar);
   });
   row.appendChild(track);
@@ -126,16 +137,25 @@ function renderOverlay(v: View): HTMLElement {
   overlay.appendChild(line);
   for (const issue of v.issues) {
     if (issue.kind === 'unknown' || Number.isNaN(issue.t)) continue;
-    const delta = issue.span.deltaBefore! / issue.lane.timescale!;
+    const delta = (issue.delta ?? 0) / issue.lane.timescale!;
     const mark = el('div', `tl-marker ${issue.kind}`);
     mark.style.left = pct(v, issue.t);
     mark.style.width = `max(2px, ${width(v, Math.abs(delta))})`;
-    const label = el('div', `tl-marker-label ${issue.kind}`, fmtMs(delta));
+    const label = el('div', `tl-marker-label ${issue.kind}`, issue.kind === 'nosync' ? 'no sync' : fmtMs(delta));
     label.style.left = pct(v, issue.t);
     label.dataset.key = `${issue.lane.key}/${issue.span.start}`;
     label.dataset.abs = String(Math.abs(delta));
     overlay.append(mark, label);
   }
+  v.events.forEach((ev, i) => {
+    if (Number.isNaN(ev.t)) return;
+    const b = ev.box;
+    const mark = el('div', 'tl-event', ev.label);
+    mark.style.left = pct(v, ev.t);
+    mark.dataset.i = String(i);
+    mark.title = `emsg v${b.version} · ${b.schemeIdUri} · value "${b.value}" · id ${b.id} · duration ${b.eventDuration}${b.timescale ? ` (${(b.eventDuration / b.timescale).toFixed(3)} s)` : ''}`;
+    overlay.appendChild(mark);
+  });
   return overlay;
 }
 
@@ -163,13 +183,19 @@ function renderSummary(v: View): void {
   s.append(el('span', 'tl-meta', `${v.lanes.length} lane${v.lanes.length === 1 ? '' : 's'}${range}`));
 
   const chips = el('span', 'tl-chips');
-  for (const kind of ['gap', 'overlap', 'unknown'] as IssueKind[]) {
+  for (const kind of ISSUE_KINDS) {
     const n = v.issues.filter((i) => i.kind === kind).length;
     if (!n) continue;
-    const chip = el('button', `tl-chip ${kind}`, `${n} ${kind}`);
+    const chip = el('button', `tl-chip ${kind}`, `${n} ${kind === 'nosync' ? 'no sync' : kind}`);
     chip.dataset.kind = kind;
     chip.title = `Jump to the next ${kind}`;
     chips.appendChild(chip);
+  }
+  const av = avOffset(v.lanes);
+  if (av !== undefined) {
+    const c = el('span', `tl-av${Math.abs(av) > AV_WARN_SECS ? ' warn' : ''}`, `A/V ${fmtMs(av, 1)}`);
+    c.title = 'first video tfdt − first audio tfdt';
+    chips.appendChild(c);
   }
   s.appendChild(chips);
 
@@ -191,7 +217,7 @@ function renderSummary(v: View): void {
     item.append(el('span', `swatch ${cls}`), text);
     return item;
   };
-  right.append(legend('segment', 'segment'), legend('gap', 'gap'), legend('overlap', 'overlap'), legend('unknown', 'unknown dur'));
+  right.append(legend('segment', 'segment'), legend('sync', 'sync'), legend('gap', 'gap'), legend('overlap', 'overlap'), legend('nosync', 'no sync'), legend('unknown', 'unknown dur'), legend('event', 'emsg'));
   right.appendChild(el('span', 'tl-scale'));
   s.appendChild(right);
 }
@@ -215,7 +241,7 @@ function buildCard(lane: Lane, span: Span, index: number): HTMLElement {
     el(
       'span',
       'hc-meta',
-      ` · track ${lane.trackId}${lane.handler ? ` · ${lane.handler}` : ''}${ts ? ` · ${ts} Hz` : ''} · ${span.segment.bytes.byteLength.toLocaleString()} B · ${clock(span.segment.time)}`,
+      ` · track ${lane.trackId}${lane.handler ? ` · ${lane.handler}` : ''}${lane.codec ? ` · ${lane.codec}` : ''}${ts ? ` · ${ts} Hz` : ''} · ${span.segment.bytes.byteLength.toLocaleString()} B · ${clock(span.segment.time)}`,
     ),
   );
   c.appendChild(head);
@@ -226,6 +252,14 @@ function buildCard(lane: Lane, span: Span, index: number): HTMLElement {
   row('tfdt', secs(span.start), `${groupDigits(span.start)} ticks`);
   if (span.duration === undefined) row('dur', 'duration unknown', '');
   else row('dur', secs(span.duration), `${groupDigits(span.duration)} ticks`);
+  const sync = span.syncOffsets;
+  row('samples', String(span.sampleCount), sync ? `${sync.length} sync${sync.length && sync[0] !== 0 ? ' · first not at start' : ''}` : 'flags unknown', sync && lane.handler === 'vide' && sync[0] !== 0 ? 'nosync' : '');
+  if (span.chunks) row('chunks', String(span.chunks.length), 'moofs in this segment');
+  const prft = span.segment.boxes.find((b) => b.type === 'prft') as { ntpTimestampSec: number; ntpTimestampFrac: number; mediaTime: number } | undefined;
+  if (prft) {
+    const wall = ntpToDate(prft.ntpTimestampSec, prft.ntpTimestampFrac);
+    row('prft', `${clock(wall)}.${String(wall.getMilliseconds()).padStart(3, '0')}`, `captured ${fmtMs((span.segment.time.getTime() - wall.getTime()) / 1000)} later · mediaTime ${groupDigits(prft.mediaTime)}`);
+  }
   const d = span.deltaBefore;
   if (d !== undefined && d !== 0) {
     const prevIndex = index; // spans are 1-based in the label: "after seg N"
@@ -284,7 +318,7 @@ function clampOffset(v: View): void {
 }
 
 function rerender(): void {
-  if (view) renderTimeline(view.container, view.summary, view.lanes, view.selected, view.onSelect);
+  if (view) renderTimeline(view.container, view.summary, view.lanes, view.events, view.selected, view.onSelect);
 }
 
 function reveal(t: number): void {
@@ -353,7 +387,13 @@ function bind(container: HTMLElement, summary: HTMLElement): void {
     if (bar) {
       const lane = view.lanes.find((l) => l.key === bar.dataset.lane);
       const span = lane?.spans[Number(bar.dataset.i)];
-      if (span) view.onSelect(span.segment, e.shiftKey);
+      if (span) view.onSelect(span.segment, e.shiftKey ? 'tfdt' : undefined);
+      return;
+    }
+    const ev = t.closest<HTMLElement>('.tl-event');
+    if (ev) {
+      const event = view.events[Number(ev.dataset.i)];
+      if (event) view.onSelect(event.segment, 'emsg');
       return;
     }
     if (t.closest('.ruler-track')) {
@@ -423,6 +463,7 @@ export function renderTimeline(
   container: HTMLElement,
   summary: HTMLElement,
   lanes: Lane[],
+  events: Event[],
   selected: Segment | null,
   onSelect: SelectSegment,
 ): void {
@@ -434,7 +475,7 @@ export function renderTimeline(
     : 1;
   const v: View = {
     lanes, timed, min, max, visMin: 0, visSpan: 1, step: 1,
-    issues: issuesOf(lanes), selected, onSelect, container, summary,
+    issues: issuesOf(lanes), events, selected, onSelect, container, summary,
   };
   clampOffset(v);
   v.visMin = min + offset;

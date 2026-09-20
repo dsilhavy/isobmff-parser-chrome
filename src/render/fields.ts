@@ -1,22 +1,14 @@
 import type { ParsedIsoBox } from '@svta/cml-iso-bmff';
+import type { ProtectionSystemSpecificHeaderBox } from '@svta/cml-iso-bmff';
 import { boxName } from '../box-names';
+import { codecString, kidsOf } from '../codecs';
 import { derived, type FieldRange } from '../field-model';
+import { formatValue } from '../format';
 import { hoverField } from './hex';
 import { el } from './util';
 
 const HIDDEN_KEYS = new Set(['type', 'size', 'view', 'boxes', 'largesize', 'usertype']);
 const SAMPLE_ROW_CAP = 50;
-
-function formatValue(value: unknown): string {
-  if (value instanceof Uint8Array) {
-    const head = [...value.subarray(0, 32)].map((b) => b.toString(16).padStart(2, '0')).join(' ');
-    return `${value.byteLength} bytes${value.byteLength ? `: ${head}${value.byteLength > 32 ? ' …' : ''}` : ''}`;
-  }
-  if (typeof value === 'bigint') return value.toString();
-  if (Array.isArray(value)) return value.map(formatValue).join(', ');
-  if (typeof value === 'object' && value !== null) return JSON.stringify(value, (_, v) => (typeof v === 'bigint' ? v.toString() : v));
-  return String(value);
-}
 
 /** Array of uniform objects (e.g. trun samples) rendered as its own table. */
 function isObjectArray(value: unknown): value is Record<string, unknown>[] {
@@ -77,14 +69,20 @@ export function renderFields(container: HTMLElement, box: ParsedIsoBox, timescal
   }
   head.appendChild(el('span', 'fields-pos', `${total.toLocaleString()} B @ 0x${offset.toString(16)} (${offset}) – 0x${(offset + total - 1).toString(16)}`));
   container.appendChild(head);
+  if (box.type === 'pssh') {
+    const kids = kidsOf(box as unknown as ProtectionSystemSpecificHeaderBox);
+    container.appendChild(el('div', 'fields-note', kids.length ? `KIDs: ${kids.join(', ')}` : 'no key IDs in this pssh'));
+  }
 
-  const entries = Object.entries(b).filter(([k, v]) => !HIDDEN_KEYS.has(k) && v !== undefined);
+  const codec = codecString(box);
+  if (codec) head.insertBefore(el('span', 'fields-codec', codec), head.querySelector('.fields-pos'));
+  const entries = Object.entries(b).filter(([k, v]) => !HIDDEN_KEYS.has(k) && v !== undefined && !(k === 'entries' && box.type === 'stsd'));
   const scalar = entries.filter(([, v]) => !isObjectArray(v));
   const tables = entries.filter(([, v]) => isObjectArray(v));
   const content = el('div', 'fields-content');
 
   if (!entries.length) {
-    content.appendChild(el('p', 'muted', (b.boxes as unknown[] | undefined)?.length ? 'Container box.' : 'No decoded fields (no reader for this box type).'));
+    content.appendChild(el('p', 'muted', (b.boxes as unknown[] | undefined)?.length || box.type === 'stsd' ? 'Container box.' : 'No decoded fields (no reader for this box type).'));
   }
 
   if (scalar.length) {

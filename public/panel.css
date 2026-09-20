@@ -530,3 +530,51 @@ main > section:last-child { border-right: 0; }
 .hc-grid .gap { color: var(--bad); }
 .hc-grid .overlap { color: var(--warn); }
 .hc-foot { font: 10px system-ui, sans-serif; color: var(--muted); margin-top: 4px; }
+
+/* ---------- timing checks / encryption ---------- */
+.badge.enc { background: var(--warn); margin-left: -3px; }
+.tl-chip.nosync { border-color: var(--bad); color: var(--bad); }
+.tl-av { font-size: 10px; color: var(--muted); margin-left: 4px; }
+.tl-av.warn { color: var(--warn); font-weight: 600; }
+.bar .sync { position: absolute; top: 0; bottom: 0; width: 1px; background: var(--on-accent); opacity: .7; }
+.swatch.sync { width: 1px; height: 10px; background: CanvasText; }
+.tl-marker.nosync { background: var(--bad); width: 2px; }
+.tl-marker-label.nosync { color: var(--bad); }
+.swatch.nosync { width: 2px; height: 10px; background: var(--bad); }
+.tl-event {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  padding: 0 3px;
+  font-size: 9px;
+  line-height: 11px;
+  color: var(--on-accent);
+  background: var(--accent);
+  border-radius: 2px;
+  cursor: pointer;
+  z-index: 4;
+  white-space: nowrap;
+}
+.tl-event::before { content: '◆ '; font-size: 7px; }
+.swatch.event { width: 10px; height: 8px; background: var(--accent); }
+.hc-grid .nosync { color: var(--bad); }
+
+.fields-note { padding: 4px 10px; font: 11px ui-monospace, monospace; color: var(--muted); border-bottom: 1px solid var(--row-border); }
+.fields-codec { font: 600 11px ui-monospace, monospace; color: var(--accent); }
+
+/* ---------- init diff ---------- */
+.tree-diff {
+  margin-left: auto;
+  max-width: 140px;
+  font: 11px system-ui, sans-serif;
+  color: inherit;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+}
+.tree-diff + .tree-collapse-all { margin-left: 6px; }
+.diff-table td:first-child { font-family: ui-monospace, monospace; color: var(--muted); }
+.diff-table td { font-family: ui-monospace, monospace; word-break: break-all; }
+.diff-table tr.changed td:nth-child(3) { color: var(--warn); }
+.diff-table tr.added td:nth-child(3) { color: var(--ok); }
+.diff-table tr.removed td:nth-child(2) { color: var(--bad); }

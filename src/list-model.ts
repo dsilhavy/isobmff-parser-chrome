@@ -1,5 +1,7 @@
-import { filterIsoBoxes, isIsoBoxType, type IsoBoxMap } from '@svta/cml-iso-bmff';
+import { filterIsoBoxes, isIsoBoxType, traverseIsoBoxes, type IsoBoxMap } from '@svta/cml-iso-bmff';
 import type { Segment } from './capture';
+import { warningsOf } from './checks';
+import { trackCodec } from './codecs';
 import { templateOf, type Lane } from './continuity';
 
 export type KindFilter = 'all' | 'init' | 'media' | 'issues';
@@ -9,11 +11,14 @@ export interface SegmentMeta {
   tracks: Set<number>;
   handlers: Set<string>;
   issue?: 'gap' | 'overlap';
+  warnings: string[]; // from checks.ts
+  encrypted: boolean; // init: has tenc; media: has senc
 }
 
 export interface Group {
   template: string;
   handler?: string;
+  codec?: string; // init groups: codec of the first track
   segments: Segment[];
   size: number;
 }
@@ -28,12 +33,24 @@ export function kindOf(segment: Segment): string {
 const hdlrs = (boxes: Iterable<unknown>) =>
   filterIsoBoxes(boxes, (b): b is IsoBoxMap['hdlr'] => isIsoBoxType('hdlr', b)).map((h) => h.handlerType);
 
+/** Whether any box of `type` exists anywhere in the tree. */
+export function hasBox(boxes: Iterable<unknown>, type: string): boolean {
+  for (const b of traverseIsoBoxes(boxes)) if ((b as { type: string }).type === type) return true;
+  return false;
+}
+
 /** Per-segment facts for filtering and list decoration, derived from the analysed lanes. */
 export function metaOf(segments: Segment[], lanes: Lane[]): Map<Segment, SegmentMeta> {
   const meta = new Map<Segment, SegmentMeta>();
   for (const s of segments) {
     const kind = kindOf(s);
-    meta.set(s, { kind, tracks: new Set(), handlers: new Set(kind === 'init' ? hdlrs(s.boxes) : []) });
+    meta.set(s, {
+      kind,
+      tracks: new Set(),
+      handlers: new Set(kind === 'init' ? hdlrs(s.boxes) : []),
+      warnings: warningsOf(s),
+      encrypted: hasBox(s.boxes, kind === 'init' ? 'tenc' : 'senc'),
+    });
   }
   for (const lane of lanes) {
     for (const span of lane.spans) {
@@ -48,9 +65,9 @@ export function metaOf(segments: Segment[], lanes: Lane[]): Map<Segment, Segment
   return meta;
 }
 
-/** Case-insensitive; whitespace-separated terms must all match. `track:N`, `init`/`media`, `gap`/`overlap`, 4-letter handler codes; else URL substring. */
+/** Case-insensitive; whitespace-separated terms must all match. `track:N`, `init`/`media`, `gap`/`overlap`/`warn`, `enc`, 4-letter handler codes; else URL substring. */
 export function matches(segment: Segment, meta: SegmentMeta, query: string, kind: KindFilter): boolean {
-  if (kind === 'issues' ? !meta.issue : kind !== 'all' && meta.kind !== kind) return false;
+  if (kind === 'issues' ? !meta.issue && !meta.warnings.length : kind !== 'all' && meta.kind !== kind) return false;
   const url = segment.url.toLowerCase();
   return query
     .toLowerCase()
@@ -60,6 +77,8 @@ export function matches(segment: Segment, meta: SegmentMeta, query: string, kind
       if (term.startsWith('track:')) return meta.tracks.has(Number(term.slice(6)));
       if (term === 'init' || term === 'media') return meta.kind === term;
       if (term === 'gap' || term === 'overlap') return meta.issue === term;
+      if (term === 'warn') return meta.warnings.length > 0;
+      if (term === 'enc') return meta.encrypted;
       if (meta.handlers.has(term)) return true;
       return url.includes(term);
     });
@@ -74,6 +93,7 @@ export function groupSegments(segments: Segment[], meta: Map<Segment, SegmentMet
     g.segments.push(s);
     g.size += s.bytes.byteLength;
     g.handler ??= [...(meta.get(s)?.handlers ?? [])][0];
+    g.codec ??= filterIsoBoxes(s.boxes as Iterable<unknown>, (b): b is IsoBoxMap['trak'] => isIsoBoxType('trak', b)).map(trackCodec).find(Boolean);
   }
   return [...groups.values()];
 }

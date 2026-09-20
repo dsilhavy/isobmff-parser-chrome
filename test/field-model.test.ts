@@ -48,3 +48,13 @@ test('derived: time fields in seconds, flags as hex', () => {
   assert.equal(derived('flags', 0x20000, 48000), '0x020000');
   assert.equal(derived('trackId', 1, 48000), undefined);
 });
+
+test('derived: DRM system id, KIDs and IV bytes', () => {
+  const wv = [0xed, 0xef, 0x8b, 0xa9, 0x79, 0xd6, 0x4a, 0xce, 0xa3, 0xc8, 0x27, 0xdc, 0xd5, 0x1d, 0x21, 0xed];
+  assert.equal(derived('systemId', wv, undefined), 'Widevine · edef8ba9-79d6-4ace-a3c8-27dcd51d21ed');
+  assert.equal(derived('systemId', Array(16).fill(0), undefined), '00000000-0000-0000-0000-000000000000');
+  const kid = Array.from({ length: 16 }, (_, i) => i);
+  assert.equal(derived('defaultKid', kid, undefined), '00010203-0405-0607-0809-0a0b0c0d0e0f');
+  assert.equal(derived('kid', [...kid, ...kid], undefined), '00010203-0405-0607-0809-0a0b0c0d0e0f, 00010203-0405-0607-0809-0a0b0c0d0e0f');
+  assert.equal(derived('kid', [], undefined), undefined);
+});

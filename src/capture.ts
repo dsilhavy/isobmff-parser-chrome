@@ -1,20 +1,6 @@
-import {
-  createVisualSampleEntryReader,
-  defaultReaderConfig,
-  readIsoBoxes,
-  type IsoBoxReadViewConfig,
-  type ParsedIsoBox,
-} from '@svta/cml-iso-bmff';
+import { readIsoBoxes, type ParsedIsoBox } from '@svta/cml-iso-bmff';
+import { readerConfig } from './readers';
 import { isIsoBmff } from './sniff';
-
-// default config lacks readers for VP9/AV1 sample entries
-const readerConfig: IsoBoxReadViewConfig = {
-  readers: {
-    ...defaultReaderConfig().readers,
-    vp09: createVisualSampleEntryReader('vp09'),
-    av01: createVisualSampleEntryReader('av01'),
-  },
-};
 
 export interface Segment {
   url: string;

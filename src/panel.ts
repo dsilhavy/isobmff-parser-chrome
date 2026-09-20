@@ -5,9 +5,13 @@ import { renderTree } from './render/tree';
 import { renderFields } from './render/fields';
 import { renderHex } from './render/hex';
 import { renderTimeline } from './render/timeline';
+import { renderDiff } from './render/diff';
+import { diff } from './diff';
+import { findBox } from './boxes';
 import { analyze, type Lane } from './continuity';
+import { eventsOf } from './timeline-model';
 import { fieldOffsets } from './field-model';
-import { groupSegments, matches, metaOf, type KindFilter } from './list-model';
+import { groupSegments, kindOf, matches, metaOf, type KindFilter } from './list-model';
 import { saveAll } from './save';
 
 const MAX_SEGMENTS = 200; // ponytail: fixed FIFO cap, make configurable if sessions need more
@@ -42,20 +46,10 @@ function timescaleFor(segment: Segment, box: ParsedIsoBox): number | undefined {
 }
 
 function selectBox(segment: Segment, box: ParsedIsoBox): void {
-  renderTree(treeEl, segment, box, (b) => selectBox(segment, b));
+  renderTree(treeEl, segment, box, (b) => selectBox(segment, b), diffCandidates(segment), (other) => showDiff(segment, other));
   const ranges = fieldOffsets(box);
   renderFields(fieldsEl, box, timescaleFor(segment, box), ranges);
   renderHex(hexEl, segment.bytes, box.view.byteOffset, box.size, ranges);
-}
-
-/** Depth-first search for the first box of `type`. */
-function findBox(boxes: ParsedIsoBox[], type: string): ParsedIsoBox | undefined {
-  for (const b of boxes) {
-    if (b.type === type) return b;
-    const hit = findBox((b as { boxes?: ParsedIsoBox[] }).boxes ?? [], type);
-    if (hit) return hit;
-  }
-  return undefined;
 }
 
 function refresh(): void {
@@ -72,18 +66,29 @@ function refresh(): void {
     if (!collapsedGroups.delete(template)) collapsedGroups.add(template);
     refresh();
   });
-  renderTimeline(timelineEl, timelineSummaryEl, lanes, selected, selectSegment);
+  renderTimeline(timelineEl, timelineSummaryEl, lanes, eventsOf(segments, lanes), selected, selectSegment);
 }
 
-function selectSegment(segment: Segment, openTfdt = false): void {
+/** Other init segments, most recent first, offered for a field diff when `segment` is an init. */
+function diffCandidates(segment: Segment): Segment[] {
+  if (kindOf(segment) !== 'init') return [];
+  return segments.filter((s) => s !== segment && kindOf(s) === 'init').reverse();
+}
+
+function showDiff(a: Segment, b: Segment): void {
+  renderDiff(fieldsEl, a, b, diff(a.boxes, b.boxes));
+  hexEl.replaceChildren();
+}
+
+function selectSegment(segment: Segment, open?: string): void {
   selected = segment;
   refresh();
-  renderTree(treeEl, segment, null, (box) => selectBox(segment, box));
+  renderTree(treeEl, segment, null, (box) => selectBox(segment, box), diffCandidates(segment), (other) => showDiff(segment, other));
   fieldsEl.replaceChildren();
   hexEl.replaceChildren();
   listEl.querySelector('.selected')?.scrollIntoView({ block: 'nearest' });
-  const tfdt = openTfdt ? findBox(segment.boxes, 'tfdt') : undefined;
-  if (tfdt) selectBox(segment, tfdt);
+  const box = open ? findBox(segment.boxes, open) : undefined;
+  if (box) selectBox(segment, box);
 }
 
 startCapture((segment) => {

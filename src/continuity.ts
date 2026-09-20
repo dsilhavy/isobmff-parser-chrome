@@ -1,11 +1,20 @@
 import { filterIsoBoxes, findIsoBox, isIsoBoxType, type IsoBoxMap } from '@svta/cml-iso-bmff';
 import type { Segment } from './capture';
+import { trackCodec } from './codecs';
+
+export interface Chunk {
+  start: number; // tfdt of this traf, in ticks
+  duration?: number;
+}
 
 export interface Span {
   segment: Segment;
   start: number; // tfdt of first traf for this track, in ticks
   duration?: number; // sum of sample durations in ticks; undefined if unresolvable
   deltaBefore?: number; // start - previous span end; >0 gap, <0 overlap, undefined if first or previous duration unknown
+  chunks?: Chunk[]; // one per traf when the track has several moofs in this segment (CMAF chunks)
+  sampleCount: number;
+  syncOffsets?: number[]; // ticks from `start` of each sync sample; undefined if any sample's flags are unresolvable
 }
 
 export interface Lane {
@@ -14,13 +23,16 @@ export interface Lane {
   trackId: number;
   handler?: string; // 'vide' | 'soun' | ... from hdlr
   timescale?: number; // from mdhd of linked init
+  codec?: string; // e.g. 'avc1.64001F', from the first stsd entry of the linked init
   spans: Span[];
 }
 
 interface TrackInfo {
   timescale?: number;
   handler?: string;
+  codec?: string;
   trexDefaultDuration?: number;
+  trexDefaultFlags?: number;
 }
 
 // Typed wrappers: the library guards narrow poorly through generic Iterable<T>.
@@ -69,30 +81,45 @@ function trackInfo(init: Segment | undefined, trackId: number): TrackInfo {
   return {
     timescale: trak ? find([trak], 'mdhd')?.timescale : undefined,
     handler: trak ? find([trak], 'hdlr')?.handlerType : undefined,
+    codec: trak ? trackCodec(trak) : undefined,
     trexDefaultDuration: trex?.defaultSampleDuration,
+    trexDefaultFlags: trex?.defaultSampleFlags,
   };
 }
 
-/** Sum of sample durations across all trafs for `trackId`; undefined if any sample has no resolvable duration. */
-function trackDuration(trafs: unknown[], trexDefault: number | undefined): number | undefined {
-  let total = 0;
+const NON_SYNC = 0x10000; // sample_is_non_sync_sample bit of sample_flags
+
+interface Samples {
+  duration?: number; // undefined if any sample has no resolvable duration
+  count: number;
+  syncOffsets?: number[]; // undefined if any sample has no resolvable flags
+}
+
+/** Walks the trun samples of `trafs` in order, resolving duration/flags through tfhd and trex defaults. */
+function samplesOf(trafs: unknown[], trex: TrackInfo): Samples {
+  let total: number | undefined = 0;
+  let count = 0;
+  let sync: number[] | undefined = [];
   for (const traf of trafs) {
     const tfhd = find([traf], 'tfhd');
     for (const trun of all([traf], 'trun')) {
-      for (const sample of trun.samples) {
-        const d = sample.sampleDuration ?? tfhd?.defaultSampleDuration ?? trexDefault;
-        if (d === undefined) return undefined;
-        total += d;
-      }
+      trun.samples.forEach((sample, i) => {
+        const d = sample.sampleDuration ?? tfhd?.defaultSampleDuration ?? trex.trexDefaultDuration;
+        const flags = sample.sampleFlags ?? (i === 0 ? trun.firstSampleFlags : undefined) ?? tfhd?.defaultSampleFlags ?? trex.trexDefaultFlags;
+        if (flags === undefined) sync = undefined;
+        else if (sync && total !== undefined && !(flags & NON_SYNC)) sync.push(total);
+        total = d === undefined || total === undefined ? undefined : total + d;
+        count++;
+      });
     }
   }
-  return total;
+  return { duration: total, count, syncOffsets: total === undefined ? undefined : sync };
 }
 
 export function analyze(segments: Segment[]): Lane[] {
   const inits = segments.filter(hasMoov);
   const lanes = new Map<string, Lane>();
-  const trexDefaults = new Map<string, number | undefined>();
+  const infos = new Map<string, TrackInfo>();
 
   for (const segment of segments) {
     const trafs = all(segment.boxes, 'traf');
@@ -111,18 +138,22 @@ export function analyze(segments: Segment[]): Lane[] {
       let lane = lanes.get(key);
       if (!lane) {
         const info = trackInfo(linkInit(segment.url, inits), trackId);
-        lane = { key, template, trackId, handler: info.handler, timescale: info.timescale, spans: [] };
+        lane = { key, template, trackId, handler: info.handler, timescale: info.timescale, codec: info.codec, spans: [] };
         lanes.set(key, lane);
-        trexDefaults.set(key, info.trexDefaultDuration);
+        infos.set(key, info);
       }
       const tfdt = find([trackTrafs[0]], 'tfdt');
       if (!tfdt) continue;
-      // ponytail: gaps between moofs inside one segment are not checked; add when debugging LL-DASH chunks
-      lane.spans.push({
-        segment,
-        start: tfdt.baseMediaDecodeTime,
-        duration: trackDuration(trackTrafs, trexDefaults.get(key)),
-      });
+      const info = infos.get(key)!;
+      const { duration, count, syncOffsets } = samplesOf(trackTrafs, info);
+      const span: Span = { segment, start: tfdt.baseMediaDecodeTime, duration, sampleCount: count, syncOffsets };
+      if (trackTrafs.length > 1) {
+        span.chunks = trackTrafs.map((traf) => ({
+          start: find([traf], 'tfdt')?.baseMediaDecodeTime ?? NaN,
+          duration: samplesOf([traf], info).duration,
+        }));
+      }
+      lane.spans.push(span);
     }
   }
 

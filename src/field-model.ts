@@ -1,4 +1,5 @@
 import type { ParsedIsoBox } from '@svta/cml-iso-bmff';
+import { drmSystemName, hexUuid } from './codecs';
 
 export interface FieldRange {
   key: string;
@@ -91,8 +92,16 @@ const TIME_KEYS = new Set([
   'sampleCompositionTimeOffset',
 ]);
 
-/** Muted annotation after a raw value: seconds for time fields, hex for flags. */
+const UUID_KEYS = new Set(['kid', 'defaultKid']);
+
+/** Muted annotation after a raw value: seconds for time fields, hex for flags, names/UUIDs for DRM ids. */
 export function derived(key: string, value: unknown, timescale: number | undefined): string | undefined {
+  if (Array.isArray(value) && value.length && value.length % 16 === 0 && (key === 'systemId' || UUID_KEYS.has(key))) {
+    const uuids: string[] = [];
+    for (let i = 0; i < value.length; i += 16) uuids.push(hexUuid(value.slice(i, i + 16)));
+    const name = key === 'systemId' ? drmSystemName(value) : undefined;
+    return name ? `${name} · ${uuids[0]}` : uuids.join(', ');
+  }
   if (typeof value !== 'number') return undefined;
   if (key === 'flags') return `0x${value.toString(16).padStart(6, '0')}`;
   if (TIME_KEYS.has(key) && timescale) return `= ${(value / timescale).toFixed(3)} s @ ${timescale} Hz`;

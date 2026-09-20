@@ -160,3 +160,59 @@ test('init sharing only the origin with the media URL is not linked', () => {
   assert.equal(lane.timescale, undefined);
   assert.equal(lane.handler, undefined);
 });
+
+test('chunks: one entry per traf when a track has several moofs, with per-chunk start and duration', () => {
+  const chunked = seg('https://a/v/1.m4s', [
+    box('moof', {}, [box('traf', {}, [box('tfhd', { trackId: 1 }), box('tfdt', { baseMediaDecodeTime: 0 }), box('trun', { samples: [{ sampleDuration: 10 }] })])]),
+    box('moof', {}, [box('traf', {}, [box('tfhd', { trackId: 1 }), box('tfdt', { baseMediaDecodeTime: 15 }), box('trun', { samples: [{ sampleDuration: 10 }] })])]),
+  ]);
+  const [lane] = analyze([chunked]);
+  assert.deepEqual(lane.spans[0].chunks, [{ start: 0, duration: 10 }, { start: 15, duration: 10 }]);
+  const single = analyze([media('https://a/v/1.m4s', 0)]);
+  assert.equal(single[0].spans[0].chunks, undefined);
+});
+
+test('sampleCount and syncOffsets from per-sample flags', () => {
+  const s = seg('https://a/v/1.m4s', [
+    box('moof', {}, [box('traf', {}, [
+      box('tfhd', { trackId: 1 }),
+      box('tfdt', { baseMediaDecodeTime: 100 }),
+      box('trun', { samples: [
+        { sampleDuration: 10, sampleFlags: 0x02000000 }, // sync
+        { sampleDuration: 10, sampleFlags: 0x01010000 }, // non-sync
+        { sampleDuration: 10, sampleFlags: 0x02000000 }, // sync
+      ] }),
+    ])]),
+  ]);
+  const [lane] = analyze([s]);
+  assert.equal(lane.spans[0].sampleCount, 3);
+  assert.deepEqual(lane.spans[0].syncOffsets, [0, 20]);
+});
+
+test('syncOffsets: firstSampleFlags applies to sample 0, tfhd default to the rest, trex default last', () => {
+  const traf = (tfhdFlags: number | undefined, firstFlags: number | undefined) =>
+    box('moof', {}, [box('traf', {}, [
+      box('tfhd', { trackId: 1, defaultSampleFlags: tfhdFlags }),
+      box('tfdt', { baseMediaDecodeTime: 0 }),
+      box('trun', { firstSampleFlags: firstFlags, samples: [{ sampleDuration: 10 }, { sampleDuration: 10 }] }),
+    ])]);
+  const [a] = analyze([seg('https://a/v/1.m4s', [traf(0x01010000, 0x02000000)])]);
+  assert.deepEqual(a.spans[0].syncOffsets, [0]);
+  const [b] = analyze([seg('https://a/v/1.m4s', [traf(undefined, undefined)])]);
+  assert.equal(b.spans[0].syncOffsets, undefined);
+  const initSeg = init('https://a/v/init.mp4', 1, 90000);
+  (initSeg.boxes[0] as unknown as { boxes: ParsedIsoBox[] }).boxes[1] = box('mvex', {}, [box('trex', { trackId: 1, defaultSampleFlags: 0x02000000 })]);
+  const [c] = analyze([initSeg, seg('https://a/v/1.m4s', [traf(undefined, undefined)])]);
+  assert.deepEqual(c.spans[0].syncOffsets, [0, 10]);
+});
+
+test('lane carries the codec string of the linked init track', () => {
+  const initSeg = init('https://a/v/init.mp4', 1, 90000);
+  const trak = (initSeg.boxes[0] as unknown as { boxes: ParsedIsoBox[] }).boxes[0] as unknown as { boxes: ParsedIsoBox[] };
+  trak.boxes[1] = box('mdia', {}, [
+    box('mdhd', { timescale: 90000 }), box('hdlr', { handlerType: 'vide' }),
+    box('minf', {}, [box('stbl', {}, [box('stsd', { entries: [box('avc1', {}, [box('avcC', { avcProfileIndication: 0x64, profileCompatibility: 0, avcLevelIndication: 0x1f })])] })])]),
+  ]);
+  const [lane] = analyze([initSeg, media('https://a/v/1.m4s', 0)]);
+  assert.equal(lane.codec, 'avc1.64001F');
+});
