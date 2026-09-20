@@ -24,6 +24,8 @@ export interface Lane {
   handler?: string; // 'vide' | 'soun' | ... from hdlr
   timescale?: number; // from mdhd of linked init
   codec?: string; // e.g. 'avc1.64001F', from the first stsd entry of the linked init
+  init?: Segment; // linked init segment
+  trexDefaults?: { duration?: number; size?: number; flags?: number }; // from trex
   spans: Span[];
 }
 
@@ -32,7 +34,9 @@ interface TrackInfo {
   handler?: string;
   codec?: string;
   trexDefaultDuration?: number;
+  trexDefaultSize?: number;
   trexDefaultFlags?: number;
+  init?: Segment;
 }
 
 // Typed wrappers: the library guards narrow poorly through generic Iterable<T>.
@@ -83,7 +87,9 @@ function trackInfo(init: Segment | undefined, trackId: number): TrackInfo {
     handler: trak ? find([trak], 'hdlr')?.handlerType : undefined,
     codec: trak ? trackCodec(trak) : undefined,
     trexDefaultDuration: trex?.defaultSampleDuration,
+    trexDefaultSize: trex?.defaultSampleSize,
     trexDefaultFlags: trex?.defaultSampleFlags,
+    init,
   };
 }
 
@@ -138,7 +144,11 @@ export function analyze(segments: Segment[]): Lane[] {
       let lane = lanes.get(key);
       if (!lane) {
         const info = trackInfo(linkInit(segment.url, inits), trackId);
-        lane = { key, template, trackId, handler: info.handler, timescale: info.timescale, codec: info.codec, spans: [] };
+        lane = {
+          key, template, trackId, handler: info.handler, timescale: info.timescale, codec: info.codec, init: info.init,
+          trexDefaults: { duration: info.trexDefaultDuration, size: info.trexDefaultSize, flags: info.trexDefaultFlags },
+          spans: [],
+        };
         lanes.set(key, lane);
         infos.set(key, info);
       }

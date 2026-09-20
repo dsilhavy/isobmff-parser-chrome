@@ -6,7 +6,8 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite build --watch",
-    "test": "tsx --test test/*.test.ts"
+    "test": "tsx --test test/*.test.ts",
+    "icons": "node scripts/icons.mjs"
   },
   "private": true,
   "type": "module",

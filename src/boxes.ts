@@ -15,3 +15,13 @@ export function findBox(boxes: ParsedIsoBox[], type: string): ParsedIsoBox | und
   }
   return undefined;
 }
+
+/** Ancestors of `target`, root first; undefined if not in the tree. */
+export function pathTo(boxes: ParsedIsoBox[], target: ParsedIsoBox, trail: ParsedIsoBox[] = []): ParsedIsoBox[] | undefined {
+  for (const b of boxes) {
+    if (b === target) return trail;
+    const hit = pathTo(childrenOf(b), target, [...trail, b]);
+    if (hit) return hit;
+  }
+  return undefined;
+}

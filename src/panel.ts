@@ -7,10 +7,12 @@ import { renderHex } from './render/hex';
 import { renderTimeline } from './render/timeline';
 import { renderDiff } from './render/diff';
 import { diff } from './diff';
-import { findBox } from './boxes';
+import { findBox, pathTo } from './boxes';
+import { av1ReducedStill, trunSamples, type Codec, type SampleInfo } from './samples';
 import { analyze, type Lane } from './continuity';
 import { eventsOf } from './timeline-model';
 import { fieldOffsets } from './field-model';
+import type { TrackRunBox } from '@svta/cml-iso-bmff';
 import { groupSegments, kindOf, matches, metaOf, type KindFilter } from './list-model';
 import { saveAll } from './save';
 
@@ -36,6 +38,7 @@ let filter = '';
 let kindFilter: KindFilter = 'all';
 const collapsedGroups = new Set<string>();
 let lanes: Lane[] = [];
+let lastBoxType: string | null = null; // re-opened in the next selected segment when present
 
 /** Timescale for the time fields of `box`: its own `timescale` field, else the one lane timescale this segment belongs to. */
 function timescaleFor(segment: Segment, box: ParsedIsoBox): number | undefined {
@@ -45,10 +48,40 @@ function timescaleFor(segment: Segment, box: ParsedIsoBox): number | undefined {
   return scales.size === 1 ? [...scales][0] : undefined;
 }
 
+/** Parser selection from the lane's codec string and init configuration record. */
+function codecFor(lane: Lane): Codec | undefined {
+  const init = lane.init;
+  const type = lane.codec?.slice(0, 4);
+  if (!init || !type) return undefined;
+  const nal = (box: string) => (findBox(init.boxes, box) as { lengthSizeMinusOne?: number } | undefined)?.lengthSizeMinusOne;
+  if (['avc1', 'avc2', 'avc3', 'avc4'].includes(type)) return { kind: 'avc', nalLengthSize: (nal('avcC') ?? 3) + 1 };
+  if (type === 'hvc1' || type === 'hev1') return { kind: 'hevc', nalLengthSize: (nal('hvcC') ?? 3) + 1 };
+  if (type === 'av01') {
+    const av1C = findBox(init.boxes, 'av1C') as { configOBUs?: Uint8Array } | undefined;
+    return { kind: 'av1', reducedStill: av1C?.configOBUs ? av1ReducedStill(av1C.configOBUs) : false };
+  }
+  return undefined;
+}
+
+/** Resolved samples of a selected trun: defaults, init and codec come from the segment's lane. */
+function samplesFor(segment: Segment, trun: ParsedIsoBox): SampleInfo[] | undefined {
+  const path = pathTo(segment.boxes, trun);
+  const traf = path?.at(-1);
+  const moof = path?.at(-2);
+  if (!traf || !moof || moof.type !== 'moof') return undefined;
+  const trackId = (findBox([traf], 'tfhd') as { trackId?: number } | undefined)?.trackId;
+  const lane = lanes.find((l) => l.trackId === trackId && l.spans.some((s) => s.segment === segment));
+  // encrypted samples: frame headers are ciphertext, flags-based class only
+  const encrypted = !!findBox([traf], 'senc') || !!(lane?.init && findBox(lane.init.boxes, 'tenc'));
+  const codec = lane && !encrypted ? codecFor(lane) : undefined;
+  return trunSamples(segment, moof, traf, trun as unknown as TrackRunBox, lane?.trexDefaults, codec);
+}
+
 function selectBox(segment: Segment, box: ParsedIsoBox): void {
+  lastBoxType = box.type;
   renderTree(treeEl, segment, box, (b) => selectBox(segment, b), diffCandidates(segment), (other) => showDiff(segment, other));
   const ranges = fieldOffsets(box);
-  renderFields(fieldsEl, box, timescaleFor(segment, box), ranges);
+  renderFields(fieldsEl, box, timescaleFor(segment, box), ranges, box.type === 'trun' ? samplesFor(segment, box) : undefined);
   renderHex(hexEl, segment.bytes, box.view.byteOffset, box.size, ranges);
 }
 
@@ -80,6 +113,7 @@ function showDiff(a: Segment, b: Segment): void {
   hexEl.replaceChildren();
 }
 
+/** Selects `segment` and re-opens `open`, else the last selected box type, when the segment has such a box. */
 function selectSegment(segment: Segment, open?: string): void {
   selected = segment;
   refresh();
@@ -87,7 +121,8 @@ function selectSegment(segment: Segment, open?: string): void {
   fieldsEl.replaceChildren();
   hexEl.replaceChildren();
   listEl.querySelector('.selected')?.scrollIntoView({ block: 'nearest' });
-  const box = open ? findBox(segment.boxes, open) : undefined;
+  const type = open ?? lastBoxType;
+  const box = type ? findBox(segment.boxes, type) : undefined;
   if (box) selectBox(segment, box);
 }
 

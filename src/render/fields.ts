@@ -4,6 +4,8 @@ import { boxName } from '../box-names';
 import { codecString, kidsOf } from '../codecs';
 import { derived, type FieldRange } from '../field-model';
 import { formatValue } from '../format';
+import { FRAME_TYPE_HELP, frameType, sampleStats, type SampleInfo } from '../samples';
+import { groupDigits } from '../timeline-model';
 import { hoverField } from './hex';
 import { el } from './util';
 
@@ -15,7 +17,7 @@ function isObjectArray(value: unknown): value is Record<string, unknown>[] {
   return Array.isArray(value) && value.length > 0 && typeof value[0] === 'object' && value[0] !== null && !(value[0] instanceof Uint8Array);
 }
 
-function renderObjectArray(name: string, rows: Record<string, unknown>[], timescale: number | undefined): DocumentFragment {
+function renderObjectArray(name: string, rows: Record<string, unknown>[], timescale: number | undefined, rowClass?: (i: number) => string): DocumentFragment {
   const frag = document.createDocumentFragment();
   frag.appendChild(el('h3', '', `${name} (${rows.length})`));
 
@@ -30,12 +32,17 @@ function renderObjectArray(name: string, rows: Record<string, unknown>[], timesc
   const addRows = (from: number, to: number) => {
     for (let i = from; i < Math.min(to, rows.length); i++) {
       const tr = body.insertRow();
+      if (rowClass) tr.className = rowClass(i);
       tr.insertCell().textContent = String(i);
       for (const col of columns) {
         const v = rows[i][col];
         const td = tr.insertCell();
         td.textContent = formatValue(v);
         if (typeof v === 'number') td.className = 'num';
+        if (col === 'type') {
+          td.className = `frame frame-${v}`;
+          td.title = FRAME_TYPE_HELP[String(v)] ?? '';
+        }
         const d = derived(col, v, timescale);
         if (d) td.title = d;
       }
@@ -56,7 +63,40 @@ function renderObjectArray(name: string, rows: Record<string, unknown>[], timesc
   return frag;
 }
 
-export function renderFields(container: HTMLElement, box: ParsedIsoBox, timescale: number | undefined, ranges: FieldRange[]): void {
+const secs = (ticks: number, ts: number | undefined) => (ts ? (ticks / ts).toFixed(3) : String(ticks));
+
+/** Stats line + sample table for a trun, replacing the generic `samples` dump. */
+function renderSamples(samples: SampleInfo[], timescale: number | undefined): DocumentFragment {
+  const st = sampleStats(samples, timescale);
+  const parts = [
+    `${st.count} samples`,
+    `Σ ${groupDigits(st.duration)} ticks${st.secs !== undefined ? ` = ${st.secs.toFixed(3)} s` : ''}`,
+    `${st.bytes.toLocaleString()} B (${st.minSize.toLocaleString()}–${st.maxSize.toLocaleString()})`,
+  ];
+  if (st.kbps !== undefined) parts.push(`${st.kbps.toLocaleString()} kbps`, `${st.fps} fps`);
+  parts.push(`${st.sync} sync`);
+  const note = el('div', 'fields-note', parts.join(' · '));
+  for (const [t, n] of Object.entries(st.types)) {
+    const span = el('span', `frame frame-${t}`, `${t} ${n}`);
+    span.title = FRAME_TYPE_HELP[t] ?? '';
+    note.append(' · ', span);
+  }
+  const frag = document.createDocumentFragment();
+  frag.appendChild(note);
+  const rows = samples.map((s) => ({
+    dts: secs(s.dts, timescale),
+    pts: secs(s.pts, timescale),
+    duration: s.duration,
+    size: s.size,
+    type: frameType(s),
+    flags: s.flags === undefined ? undefined : `0x${s.flags.toString(16).padStart(8, '0')}`,
+    offset: s.offset,
+  }));
+  frag.appendChild(renderObjectArray('samples', rows, timescale, (i) => (samples[i].sync ? 'sample-sync' : '')));
+  return frag;
+}
+
+export function renderFields(container: HTMLElement, box: ParsedIsoBox, timescale: number | undefined, ranges: FieldRange[], samples?: SampleInfo[]): void {
   container.replaceChildren();
   const b = box as unknown as Record<string, unknown>;
   const offset = box.view.byteOffset;
@@ -107,6 +147,9 @@ export function renderFields(container: HTMLElement, box: ParsedIsoBox, timescal
     content.appendChild(grid);
   }
 
-  for (const [key, value] of tables) content.appendChild(renderObjectArray(key, value as Record<string, unknown>[], timescale));
+  for (const [key, value] of tables) {
+    if (samples && key === 'samples') content.appendChild(renderSamples(samples, timescale));
+    else content.appendChild(renderObjectArray(key, value as Record<string, unknown>[], timescale));
+  }
   container.appendChild(content);
 }

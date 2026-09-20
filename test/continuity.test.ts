@@ -216,3 +216,10 @@ test('lane carries the codec string of the linked init track', () => {
   const [lane] = analyze([initSeg, media('https://a/v/1.m4s', 0)]);
   assert.equal(lane.codec, 'avc1.64001F');
 });
+
+test('lane keeps a reference to its linked init segment', () => {
+  const initSeg = init('https://a/v/init.mp4', 1, 90000);
+  const [lane] = analyze([initSeg, media('https://a/v/1.m4s', 0)]);
+  assert.equal(lane.init, initSeg);
+  assert.equal(analyze([media('https://a/v/1.m4s', 0)])[0].init, undefined);
+});

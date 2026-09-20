@@ -578,3 +578,11 @@ main > section:last-child { border-right: 0; }
 .diff-table tr.changed td:nth-child(3) { color: var(--warn); }
 .diff-table tr.added td:nth-child(3) { color: var(--ok); }
 .diff-table tr.removed td:nth-child(2) { color: var(--bad); }
+
+/* ---------- trun samples ---------- */
+#fields td.frame { font-weight: 600; text-align: center; }
+#fields td.frame-I, #fields td.frame-IRAP, #fields td.frame-KEY { color: var(--ok); }
+#fields td.frame-SWITCH { color: var(--warn); }
+#fields td.frame-INTRA { color: var(--accent); }
+#fields td.frame-B, #fields td.frame-EXISTING { color: var(--muted); font-weight: 400; }
+#fields tr.sample-sync td:first-child { font-weight: 600; color: var(--ok); }
