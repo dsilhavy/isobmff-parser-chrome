@@ -219,3 +219,30 @@ test('real Widevine session (dash.js + Shaka proxy, Chrome): certificate + licen
   assert.ok(m.items[1].issues[0].startsWith('granted configuration has capabilities without a robustness level'));
   assert.deepEqual(m.issues, []);
 });
+
+test('exportLog keeps only matched license exchanges and redacts credential headers', async () => {
+  const { exportLog, redactHeaders } = await import('../src/eme/model');
+  const t = 2_000_000;
+  const events: RawEvent[] = [
+    { seq: 1, t, kind: 'call', name: 'createSession', target: 'MediaKeys#1', args: [] },
+    { seq: 2, t: t + 1, kind: 'result', name: 'createSession', target: 'MediaKeys#1', callId: 1, value: { $ref: 'Session#1' } },
+    { seq: 3, t: t + 10, kind: 'event', name: 'message', target: 'Session#1', value: { messageType: 'license-request', message: { $b64: 'CAQ=' } } },
+    { seq: 4, t: t + 100, kind: 'call', name: 'update', target: 'Session#1', args: [{ $b64: 'CAU=' }] },
+  ];
+  const base = { method: 'POST', status: 200, statusText: 'OK', duration: 5, responseHeaders: [{ name: 'Set-Cookie', value: 's=1' }] };
+  const license: NetExchange = { ...base, url: 'https://lic.example/wv', started: t + 20, requestHeaders: [{ name: 'Authorization', value: 'Bearer abc' }, { name: 'x-dt-custom-data', value: 'eyJ...' }, { name: 'content-type', value: 'application/octet-stream' }] };
+  const login: NetExchange = { ...base, url: 'https://app.example/login', started: t - 1000, requestHeaders: [{ name: 'cookie', value: 'sid=secret' }], requestBody: new TextEncoder().encode('password=hunter2') };
+  const out = exportLog(events, buildModel(events, [login, license], [])) as { exchanges: (NetExchange & { message: number })[] };
+  assert.equal(out.exchanges.length, 1);
+  const x = out.exchanges[0];
+  assert.equal(x.url, license.url);
+  assert.equal(x.message, 3);
+  assert.deepEqual(x.requestHeaders, [
+    { name: 'Authorization', value: '[redacted]' },
+    { name: 'x-dt-custom-data', value: '[redacted]' },
+    { name: 'content-type', value: 'application/octet-stream' },
+  ]);
+  assert.deepEqual(x.responseHeaders, [{ name: 'Set-Cookie', value: '[redacted]' }]);
+  assert.ok(!JSON.stringify(out).includes('hunter2'));
+  assert.deepEqual(redactHeaders([{ name: 'X-Api-Key', value: 'k' }]), [{ name: 'X-Api-Key', value: '[redacted]' }]);
+});

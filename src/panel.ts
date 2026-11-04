@@ -16,8 +16,8 @@ import type { TrackRunBox } from '@svta/cml-iso-bmff';
 import { groupSegments, kindOf, matches, metaOf, type KindFilter } from './list-model';
 import { saveAll, type Entry } from './save';
 import { armHook, startEmePolling, startLicenseCapture, MAX_EXCHANGES } from './eme/capture';
-import { buildModel, segmentKids, type EmeModel } from './eme/model';
-import { bytesToB64, swapUuid } from './eme/bytes';
+import { buildModel, exportLog, segmentKids, type EmeModel } from './eme/model';
+import { swapUuid } from './eme/bytes';
 import type { NetExchange, RawEvent } from './eme/types';
 import { renderDrmDetail, renderDrmList, renderDrmSequence, type DrmHandlers } from './render/drm';
 
@@ -270,13 +270,10 @@ setInterval(() => {
   if (view === 'drm' && emeEvents.length) refreshDrm();
 }, 3000);
 
-/** EME log for "Save all": raw hook events plus captured POST exchanges, bodies base64. */
+/** EME log for "Save all": raw hook events plus the matched license exchanges (credential headers redacted). */
 function emeEntries(): Entry[] {
   if (!emeEvents.length) return [];
-  const log = {
-    events: emeEvents,
-    exchanges: exchanges.map((x) => ({ ...x, requestBody: x.requestBody && bytesToB64(x.requestBody), responseBody: x.responseBody && bytesToB64(x.responseBody) })),
-  };
+  const log = exportLog(emeEvents, buildModel(emeEvents, exchanges, segmentKids(segments)));
   return [{ path: 'eme/eme-log.json', bytes: new TextEncoder().encode(JSON.stringify(log, null, 2)) }];
 }
 

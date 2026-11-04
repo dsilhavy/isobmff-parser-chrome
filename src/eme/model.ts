@@ -271,3 +271,33 @@ export function buildModel(events: RawEvent[], exchanges: NetExchange[], segKids
   }
   return { items, sessions: [...sessions.values()], kids: [...kidMap.values()], issues };
 }
+
+const SENSITIVE_HEADER = /^(cookie|set-cookie|authorization|proxy-authorization)$|token|key|secret|auth|session|jwt|custom-?data/i;
+
+/** Header list with credentials masked, for anything written to disk. */
+export const redactHeaders = (headers: { name: string; value: string }[]) => headers.map((h) => (SENSITIVE_HEADER.test(h.name) ? { name: h.name, value: '[redacted]' } : h));
+
+/**
+ * Contents of eme-log.json: the raw hook events plus only the network exchanges matched to a
+ * license message, with credential headers redacted. Unrelated POSTs (logins, analytics) are left out.
+ */
+export function exportLog(events: RawEvent[], model: EmeModel): object {
+  const seen = new Set<string>();
+  const exchanges = model.items.flatMap((it) => {
+    const x = it.name === 'message' ? it.exchange : undefined;
+    const key = x && `${x.started}|${x.url}`;
+    if (!x || seen.has(key!)) return [];
+    seen.add(key!);
+    return [
+      {
+        message: it.id,
+        ...x,
+        requestHeaders: redactHeaders(x.requestHeaders),
+        responseHeaders: redactHeaders(x.responseHeaders),
+        requestBody: x.requestBody && bytesToB64(x.requestBody),
+        responseBody: x.responseBody && bytesToB64(x.responseBody),
+      },
+    ];
+  });
+  return { note: 'credential headers redacted; only license exchanges matched to a CDM message are included', events, exchanges };
+}
