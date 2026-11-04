@@ -6,6 +6,19 @@ Parsing is done with [`@svta/cml-iso-bmff`](https://github.com/streaming-video-t
 
 Codec-independent: any codec packaged in ISOBMFF/CMAF works (AVC, HEVC, VP9, AV1, AAC, ...). WebM/Matroska is a different container (EBML) and is not supported.
 
+Two views in one panel:
+
+- **Segments**: box tree, decoded fields, hex view, per-track timeline, structural and timing checks, init diff and frame types
+- **DRM**: the EME call/event flow with decoded Widevine, PlayReady, ClearKey and FairPlay payloads, matched license requests, key statuses and KID cross-checks against the segments
+
+See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## Install from a release
+
+1. Download `isobmff-inspector-<version>.zip` from the [latest release](https://github.com/dsilhavy/isobmff-parser-chrome/releases/latest) and unzip it
+2. Open `chrome://extensions` and enable **Developer mode**
+3. **Load unpacked** → select the unzipped folder
+
 ## Build
 
 ```bash
@@ -13,7 +26,7 @@ npm install
 npm run build
 ```
 
-## Install in Chrome
+## Install a local build
 
 1. Open `chrome://extensions`
 2. Enable **Developer mode**
@@ -56,3 +69,15 @@ npm run dev    # rebuild on change; reload the extension + DevTools to pick it u
 npm run icons  # regenerate public/icons/*.png from scripts/icons.mjs
 npm test       # unit tests (sniffer, readers, codecs, checks, continuity, timeline/list/field models, diff, zip, EME parsers, hook + model)
 ```
+
+## Branching and releases
+
+The project follows [git-flow](https://nvie.com/posts/a-successful-git-branching-model/):
+
+- `main`: released versions only, every merge is tagged `vX.Y.Z`
+- `development`: integration branch for the next release
+- `feature/<name>`: branched from and merged back into `development`
+- `release/X.Y.Z`: branched from `development` for the version bump and release notes, merged into `main` (tagged) and back into `development`
+- `hotfix/X.Y.Z`: branched from `main` for urgent fixes, merged into `main` (tagged) and `development`
+
+Versions follow [Semantic Versioning](https://semver.org/). The version lives in both `package.json` and `public/manifest.json`; keep them equal. Each GitHub release attaches the zipped `dist/` build.

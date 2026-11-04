@@ -1,6 +1,6 @@
 {
   "name": "isobmff-parser-chrome",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Chrome DevTools panel that parses the ISOBMFF box structure of media segments",
   "main": "index.js",
   "scripts": {
