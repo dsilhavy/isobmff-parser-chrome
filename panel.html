@@ -8,12 +8,14 @@
   <body>
     <header>
       <strong>ISOBMFF Box Inspector</strong>
+      <span class="seg" id="view"><button data-view="segments" class="selected">Segments</button><button data-view="drm">DRM</button></span>
       <span id="count">0 segments</span>
       <span class="divider"></span>
       <label class="filter"><span class="filter-icon">⌕</span><input id="filter" type="search" placeholder="Filter · name, url, track…" spellcheck="false" /></label>
       <span class="seg" id="kind">
         <button data-kind="all" class="selected">All</button><button data-kind="init">init</button><button data-kind="media">media</button><button data-kind="issues">issues</button>
       </span>
+      <button id="arm" hidden title="Reloads the page with a hook that records EME calls before any page script runs"><span id="arm-dot" class="arm-dot"></span>Reload &amp; capture EME</button>
       <span id="status"></span>
       <button id="save">Save all</button>
       <button id="clear">Clear</button>
@@ -29,9 +31,21 @@
         <div id="hex"></div>
       </section>
     </main>
+    <main id="drm-main" hidden>
+      <section id="drm-flow-pane">
+        <div id="drm-flow"></div>
+        <p id="drm-empty" class="empty"></p>
+      </section>
+      <section id="drm-detail-pane"><div id="drm-detail"></div></section>
+      <section id="drm-hex-pane"><div id="drm-hex"></div></section>
+    </main>
     <details id="timeline-pane" open tabindex="0">
       <summary id="timeline-summary"></summary>
       <div id="timeline"></div>
+    </details>
+    <details id="drm-seq-pane" open hidden>
+      <summary id="drm-seq-summary"></summary>
+      <div id="drm-seq"></div>
     </details>
   </body>
 </html>
