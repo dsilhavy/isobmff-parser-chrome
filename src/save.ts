@@ -148,9 +148,9 @@ async function writeToFolder(root: FileSystemDirectoryHandle, entries: Entry[]):
  * unavailable or blocked (the DevTools panel is an iframe, so it can be).
  * Returns a status message; rejects only if saving itself failed.
  */
-export async function saveAll(segments: Segment[]): Promise<string> {
-  if (!segments.length) return 'nothing to save';
-  const entries = entriesFor(segments);
+export async function saveAll(segments: Segment[], extra: Entry[] = []): Promise<string> {
+  const entries = [...entriesFor(segments), ...extra];
+  if (!entries.length) return 'nothing to save';
   const picker = (window as unknown as { showDirectoryPicker?: Picker }).showDirectoryPicker;
 
   if (picker) {
@@ -163,10 +163,10 @@ export async function saveAll(segments: Segment[]): Promise<string> {
     }
     if (root) {
       await writeToFolder(root, entries);
-      return `saved ${entries.length} segments to ${root.name}/`;
+      return `saved ${entries.length} files to ${root.name}/`;
     }
   }
 
   downloadZip(entries);
-  return `saved ${entries.length} segments as a zip`;
+  return `saved ${entries.length} files as a zip`;
 }

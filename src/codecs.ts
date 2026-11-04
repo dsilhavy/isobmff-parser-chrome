@@ -1,9 +1,9 @@
 import type { ParsedIsoBox, ProtectionSystemSpecificHeaderBox } from '@svta/cml-iso-bmff';
+import { hexUuid } from './eme/bytes';
+import { decodeProto } from './eme/parse/protobuf';
+import { wrmHeaderKids } from './eme/parse/playready';
 
-const hex = (bytes: ArrayLike<number>) => Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
-
-/** 16 bytes → 8-4-4-4-12 lowercase. */
-export const hexUuid = (bytes: ArrayLike<number>): string => hex(bytes).replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+export { hexUuid };
 
 const DRM_SYSTEMS: Record<string, string> = {
   'edef8ba9-79d6-4ace-a3c8-27dcd51d21ed': 'Widevine',
@@ -15,51 +15,12 @@ const DRM_SYSTEMS: Record<string, string> = {
 
 export const drmSystemName = (systemId: ArrayLike<number>): string | undefined => DRM_SYSTEMS[hexUuid(systemId)];
 
-/** Widevine PSSH data is a protobuf; key_ids is field 2 (tag 0x12), 16 bytes each. */
-function widevineKids(data: number[]): string[] {
-  const out: string[] = [];
-  let pos = 0;
-  const varint = () => {
-    let v = 0;
-    let shift = 0;
-    while (pos < data.length) {
-      const b = data[pos++];
-      v += (b & 0x7f) * 2 ** shift;
-      shift += 7;
-      if (!(b & 0x80)) break;
-    }
-    return v;
-  };
-  while (pos < data.length) {
-    const tag = varint();
-    const wire = tag & 7;
-    if (wire === 0) varint();
-    else if (wire === 2) {
-      const len = varint();
-      if (tag >> 3 === 2 && len === 16) out.push(hexUuid(data.slice(pos, pos + 16)));
-      pos += len;
-    } else break; // fixed32/64 never appear in a Widevine header
-  }
-  return out;
-}
+/** Widevine PSSH data is a protobuf; key_ids is field 2, 16 bytes each. */
+const widevineKids = (data: number[]): string[] =>
+  (decodeProto(new Uint8Array(data)) ?? []).flatMap((f) => (f.no === 2 && f.value instanceof Uint8Array && f.value.length === 16 ? [hexUuid(f.value)] : []));
 
 /** PlayReady Object: 10-byte header, then UTF-16LE WRMHEADER XML with base64 KIDs in GUID byte order. */
-function playReadyKids(data: number[]): string[] {
-  const xml = new TextDecoder('utf-16le').decode(new Uint8Array(data.slice(10)));
-  const out: string[] = [];
-  for (const m of xml.matchAll(/<KID[^>]*?(?:VALUE="([^"]+)"[^>]*>|>([^<]+)<\/KID>)/g)) {
-    const b64 = m[1] ?? m[2];
-    if (!b64) continue;
-    try {
-      const g = Uint8Array.from(atob(b64), (c) => c.charCodeAt(0));
-      if (g.length !== 16) continue;
-      out.push(hexUuid([g[3], g[2], g[1], g[0], g[5], g[4], g[7], g[6], ...g.slice(8)]));
-    } catch {
-      /* not base64 */
-    }
-  }
-  return out;
-}
+const playReadyKids = (data: number[]): string[] => wrmHeaderKids(new TextDecoder('utf-16le').decode(new Uint8Array(data.slice(10))));
 
 /** Key IDs named by a pssh: v1 kid list plus those in Widevine/PlayReady payloads, de-duplicated. */
 // ponytail: Widevine + PlayReady payloads only
