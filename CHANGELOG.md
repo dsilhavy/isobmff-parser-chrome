@@ -11,6 +11,10 @@ All notable changes to this project are documented here. Versions follow [Semant
 - Sample entry extensions `btrt`, `pasp`, `clap`, `colr`, `clli`, `mdcv` and `chnl`, with hex field maps for the fixed-size ones
 - Readable names for colour primaries, transfer (PQ/HLG), matrix, AC-3 channel modes, sample rates and bitrates
 - Codec strings for AC-4, Dolby Vision, VVC and MPEG-H
+- Sample groups: `sgpd` with decoded `seig`, `roll`/`prol`, `sap `, `rap `, `tele`, `drap` and `sync` entries, and `sbgp`
+- Groups column in the `trun` sample table, resolving fragment-local and init (`stbl`) descriptions and the `sgpd` v2 default
+- Warnings for `sbgp` sample totals that differ from the truns and for dangling fragment-local group indexes
+- `seig` KIDs (key rotation) take part in the DRM tab's segment KID check
 
 ### Changed
 

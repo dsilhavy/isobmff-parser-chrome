@@ -91,6 +91,7 @@ function renderSamples(samples: SampleInfo[], timescale: number | undefined): Do
     type: frameType(s),
     flags: s.flags === undefined ? undefined : `0x${s.flags.toString(16).padStart(8, '0')}`,
     offset: s.offset,
+    ...(samples.some((x) => x.groups) ? { groups: s.groups ?? '' } : {}),
   }));
   frag.appendChild(renderObjectArray('samples', rows, timescale, (i) => (samples[i].sync ? 'sample-sync' : '')));
   return frag;

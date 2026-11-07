@@ -1,4 +1,5 @@
 import type { ParsedIsoBox, ProtectionSystemSpecificHeaderBox } from '@svta/cml-iso-bmff';
+import { seigKids } from '../sample-groups';
 import { childrenOf } from '../boxes';
 import { kidsOf } from '../codecs';
 import { b64ToBytes, bytesToB64, hexUuid, indexOf, kidString, swapUuid } from './bytes';
@@ -50,13 +51,13 @@ export interface SessionInfo {
 
 export interface SegmentKid {
   kid: string;
-  source: 'tenc' | 'pssh';
+  source: 'tenc' | 'pssh' | 'seig';
   url: string;
 }
 
 export interface KidInfo {
   kid: string;
-  sources: string[]; // tenc, pssh, initData, license, keyStatus
+  sources: string[]; // tenc, pssh, seig, initData, license, keyStatus
   status?: string;
   urls: string[];
 }
@@ -83,7 +84,7 @@ const field = (v: unknown, k: string): unknown => (v && typeof v === 'object' ? 
 const BAD_STATUS = new Set(['output-restricted', 'output-downscaled', 'internal-error', 'expired']);
 const NO_UPDATE_AFTER_MS = 3000;
 
-/** KIDs named by tenc / pssh boxes of captured segments. */
+/** KIDs named by tenc / pssh boxes and protected 'seig' sample groups (key rotation) of captured segments. */
 export function segmentKids(segments: { url: string; boxes: ParsedIsoBox[] }[]): SegmentKid[] {
   const out: SegmentKid[] = [];
   const walk = (boxes: ParsedIsoBox[], url: string) => {
@@ -93,6 +94,8 @@ export function segmentKids(segments: { url: string; boxes: ParsedIsoBox[] }[]):
         if (k && k.some((x) => x)) out.push({ kid: hexUuid(k), source: 'tenc', url });
       } else if (b.type === 'pssh') {
         for (const kid of kidsOf(b as unknown as ProtectionSystemSpecificHeaderBox)) out.push({ kid, source: 'pssh', url });
+      } else if (b.type === 'sgpd') {
+        for (const kid of seigKids([b])) out.push({ kid, source: 'seig', url });
       }
       walk(childrenOf(b), url);
     }
@@ -265,8 +268,9 @@ export function buildModel(events: RawEvent[], exchanges: NetExchange[], segKids
   const issues: string[] = [];
   if (keyed.size) {
     for (const k of kidMap.values()) {
-      if (keyed.has(k.kid) || !(k.sources.includes('tenc') || k.sources.includes('pssh'))) continue;
-      issues.push(`KID ${k.kid} (${k.sources.filter((s) => s === 'tenc' || s === 'pssh').join('/')} in captured segments) is not in any license or key status`);
+      const inSegments = k.sources.filter((s) => s === 'tenc' || s === 'pssh' || s === 'seig');
+      if (keyed.has(k.kid) || !inSegments.length) continue;
+      issues.push(`KID ${k.kid} (${inSegments.join('/')} in captured segments) is not in any license or key status`);
     }
   }
   return { items, sessions: [...sessions.values()], kids: [...kidMap.values()], issues };

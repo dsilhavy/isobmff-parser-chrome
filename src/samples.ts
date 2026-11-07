@@ -1,6 +1,7 @@
 import type { ParsedIsoBox, TrackFragmentHeaderBox, TrackRunBox } from '@svta/cml-iso-bmff';
 import { childrenOf } from './boxes';
 import type { Segment } from './capture';
+import { groupLabel, trafSampleGroups, type SgpdBox } from './sample-groups';
 
 /** AVC slice types, HEVC IRAP, AV1 frame types. */
 export type SliceType = 'I' | 'P' | 'B' | 'SI' | 'SP' | 'IRAP' | 'KEY' | 'INTER' | 'INTRA' | 'SWITCH' | 'EXISTING';
@@ -20,6 +21,7 @@ export interface SampleInfo {
   isDependedOn: number; // sample_is_depended_on: 0 unknown, 1 yes, 2 no (disposable)
   offset?: number; // byte offset in segment.bytes; undefined if unresolvable
   slice?: SliceType; // parsed from mdat (AVC slice_type, HEVC IRAP, AV1 frame_type)
+  groups?: string; // sample group memberships (sbgp → sgpd), e.g. `seig 1a2b3c4d… · roll -1`
 }
 
 /** Fallback sample values, tfhd first then trex. */
@@ -118,7 +120,8 @@ function sliceOf(bytes: Uint8Array, offset: number, size: number, codec: Codec):
 /**
  * Resolved samples of `trun`, walking the traf's truns in order for decode time and data position.
  * Data base = tfhd.baseDataOffset if present, else the moof's offset (default-base-is-moof and the common case).
- * `codec` enables frame-type parsing from the mdat bytes.
+ * `codec` enables frame-type parsing from the mdat bytes; `moovGroups` (the track's stbl sgpd boxes) resolves
+ * sample group indexes that point into the init segment.
  */
 // ponytail: HEVC only tells IRAP vs. not; P/B slice_type needs the PPS (num_extra_slice_header_bits), add when needed
 export function trunSamples(
@@ -128,6 +131,7 @@ export function trunSamples(
   trun: TrackRunBox,
   trex: Defaults = {},
   codec?: Codec,
+  moovGroups: SgpdBox[] = [],
 ): SampleInfo[] {
   const kids = childrenOf(traf);
   const tfhd = kids.find((b) => b.type === 'tfhd') as (TrackFragmentHeaderBox & ParsedIsoBox) | undefined;
@@ -136,11 +140,14 @@ export function trunSamples(
   const dur = (s: TrackRunBox['samples'][number]) => s.sampleDuration ?? tfhd?.defaultSampleDuration ?? trex.duration;
   const size = (s: TrackRunBox['samples'][number]) => s.sampleSize ?? tfhd?.defaultSampleSize ?? trex.size;
 
+  const groups = trafSampleGroups(traf, moovGroups);
+  let first = 0; // index of the trun's first sample within the traf
   let dts = tfdt?.baseMediaDecodeTime ?? 0;
   let pos: number | undefined = base;
   for (const t of kids.filter((b) => b.type === 'trun') as (TrackRunBox & ParsedIsoBox)[]) {
     if (t.dataOffset !== undefined) pos = base + t.dataOffset;
     if (t !== trun) {
+      first += t.samples.length;
       for (const s of t.samples) {
         dts += dur(s) ?? 0;
         const sz = size(s);
@@ -166,6 +173,8 @@ export function trunSamples(
         offset,
       };
       if (codec && offset !== undefined && sz !== undefined) info.slice = sliceOf(segment.bytes, offset, sz, codec);
+      const g = groups[first + index];
+      if (g?.length) info.groups = g.map(groupLabel).join(' · ');
       dts += d ?? 0;
       pos = pos === undefined || sz === undefined ? undefined : pos + sz;
       return info;

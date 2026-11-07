@@ -1,6 +1,8 @@
 import { filterIsoBoxes, findIsoBox, isIsoBoxType, type IsoBoxMap } from '@svta/cml-iso-bmff';
 import type { Segment } from './capture';
 import { codecString } from './codecs';
+import { trafGroupWarnings } from './sample-groups';
+import type { ParsedIsoBox } from '@svta/cml-iso-bmff';
 
 const find = <T extends keyof IsoBoxMap>(boxes: Iterable<unknown>, type: T): IsoBoxMap[T] | null =>
   findIsoBox(boxes, (b): b is IsoBoxMap[T] => isIsoBoxType(type, b));
@@ -35,7 +37,10 @@ export function warningsOf(segment: Segment): string[] {
   const top = segment.boxes as { type: string; size: number; largesize?: number }[];
   top.forEach((b, i) => {
     if (b.type !== 'moof') return;
-    for (const traf of all([b], 'traf')) if (!find([traf], 'tfdt')) out.push('traf without tfdt');
+    for (const traf of all([b], 'traf')) {
+      if (!find([traf], 'tfdt')) out.push('traf without tfdt');
+      out.push(...trafGroupWarnings(traf as unknown as ParsedIsoBox));
+    }
     const next = top[i + 1];
     if (next?.type !== 'mdat') return;
     const payload = next.largesize !== undefined ? next.largesize - 16 : next.size - 8;

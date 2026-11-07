@@ -7,6 +7,7 @@ import {
   type SampleEncryptionBox,
 } from '@svta/cml-iso-bmff';
 import { mediaReaders } from './readers-media';
+import { readSbgp, readSgpd } from './sample-groups';
 
 type Body<T> = Omit<T, 'type'>;
 type Aux<T> = Omit<Body<T>, 'auxInfoType'> & { auxInfoType?: string }; // library types it as number; the fourcc reads better
@@ -247,6 +248,8 @@ export const readerConfig: IsoBoxReadViewConfig = {
   readers: {
     ...defaultReaderConfig().readers,
     ...mediaReaders,
+    sgpd: readSgpd,
+    sbgp: readSbgp,
     senc: readSenc,
     saiz: readSaiz,
     saio: readSaio,
