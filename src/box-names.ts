@@ -28,6 +28,18 @@ const NAMES: Record<string, string> = {
   stpp: 'XML Subtitle Sample Entry', wvtt: 'WebVTT Sample Entry', vttC: 'WebVTT Configuration',
   btrt: 'Bit Rate', pasp: 'Pixel Aspect Ratio', colr: 'Colour Information', clap: 'Clean Aperture',
   uuid: 'User Extension', kind: 'Track Kind', ilst: 'Item List',
+  clli: 'Content Light Level', mdcv: 'Mastering Display Colour Volume', cclv: 'Content Colour Volume',
+  chnl: 'Channel Layout', ludt: 'Audio Loudness', tlou: 'Track Loudness Info', alou: 'Album Loudness Info',
+  'ac-4': 'AC-4 Sample Entry', dac4: 'AC-4 Specific',
+  dvh1: 'Dolby Vision HEVC Sample Entry', dvhe: 'Dolby Vision HEVC Sample Entry (in-band)', dvav: 'Dolby Vision AVC Sample Entry (in-band)',
+  dva1: 'Dolby Vision AVC Sample Entry', dav1: 'Dolby Vision AV1 Sample Entry',
+  dvcC: 'Dolby Vision Configuration', dvvC: 'Dolby Vision Configuration (profile 8+)', dvwC: 'Dolby Vision Configuration (profile 20)',
+  vvc1: 'VVC Sample Entry', vvi1: 'VVC Sample Entry (in-band)', vvcC: 'VVC Configuration',
+  mha1: 'MPEG-H Audio Sample Entry', mha2: 'MPEG-H Audio Sample Entry (multi-stream)', mhm1: 'MPEG-H Audio Sample Entry (MHAS)',
+  mhm2: 'MPEG-H Audio Sample Entry (MHAS, multi-stream)', mhaC: 'MPEG-H Audio Configuration',
+  dtsc: 'DTS Sample Entry', dtse: 'DTS Express Sample Entry', dtsh: 'DTS-HD Sample Entry', dtsl: 'DTS-HD Lossless Sample Entry',
+  dtsx: 'DTS:X Sample Entry', ddts: 'DTS Specific', ipcm: 'Integer PCM Sample Entry', fpcm: 'Float PCM Sample Entry',
+  pcmC: 'PCM Configuration', alac: 'ALAC Sample Entry', mp4v: 'MPEG-4 Visual Sample Entry', sbtt: 'Text Subtitle Sample Entry', mime: 'MIME',
 };
 
 export const boxName = (type: string): string | undefined => NAMES[type];

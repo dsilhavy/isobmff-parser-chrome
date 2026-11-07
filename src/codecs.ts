@@ -39,6 +39,7 @@ type Fields = Record<string, unknown>;
 const kids = (box: unknown): ParsedIsoBox[] => (box as { boxes?: ParsedIsoBox[] } | undefined)?.boxes ?? [];
 const child = (box: unknown, type: string): Fields | undefined => kids(box).find((b) => b.type === type) as Fields | undefined;
 const hex2 = (n: number) => n.toString(16).toUpperCase().padStart(2, '0');
+const pad2 = (n: unknown) => String(n).padStart(2, '0');
 const fourccOf = (v: unknown): string | undefined =>
   typeof v === 'string' ? v : typeof v === 'number' ? String.fromCharCode(v >>> 24, (v >>> 16) & 255, (v >>> 8) & 255, v & 255) : undefined;
 
@@ -82,10 +83,48 @@ export function codecString(entry: { type: string }): string | undefined {
     case 'mp4a':
       return esds && `mp4a.${hex2(esds.objectTypeIndication as number)}${esds.audioObjectType !== undefined ? `.${esds.audioObjectType}` : ''}`;
     case 'Opus':
+      return 'opus'; // Opus in ISOBMFF 4.3: codecs="opus"
     case 'fLaC':
+      return 'flac'; // FLAC in ISOBMFF 3.3: codecs="flac"
+    case 'ac-4': {
+      // ETSI TS 103 190-2 E.13: ac-4.<bitstream_version>.<presentation_version>.<mdcompat>
+      const d = child(entry, 'dac4');
+      if (d?.presentationVersion === undefined || d.mdcompat === undefined) return type;
+      return `ac-4.${pad2(d.bitstreamVersion)}.${pad2(d.presentationVersion)}.${pad2(d.mdcompat)}`;
+    }
+    case 'dvh1':
+    case 'dvhe':
+    case 'dvav':
+    case 'dva1':
+    case 'dav1': {
+      // Dolby Vision: <entry>.<profile>.<level>, two decimal digits each
+      const dv = child(entry, 'dvcC') ?? child(entry, 'dvvC') ?? child(entry, 'dvwC');
+      return dv?.dvProfile !== undefined ? `${type}.${pad2(dv.dvProfile)}.${pad2(dv.dvLevel)}` : undefined;
+    }
+    case 'vvc1':
+    case 'vvi1': {
+      // ponytail: profile/tier/level only; the optional constraint (C…) and sub-layer (S…) elements of 14496-15 E.6 are left out
+      const vvcC = child(entry, 'vvcC');
+      return vvcC?.generalProfileIdc !== undefined ? `${type}.${vvcC.generalProfileIdc}.${vvcC.generalTierFlag ? 'H' : 'L'}${vvcC.generalLevelIdc}` : undefined;
+    }
+    case 'mha1':
+    case 'mha2':
+    case 'mhm1':
+    case 'mhm2': {
+      // ISO/IEC 23008-3 21.3: <entry>.0x<mpegh3daProfileLevelIndication>
+      const mhaC = child(entry, 'mhaC');
+      return mhaC ? `${type}.0x${hex2(mhaC.mpegh3daProfileLevelIndication as number)}` : type;
+    }
     case 'ac-3':
     case 'ec-3':
-    case 'ac-4':
+    case 'dtsc':
+    case 'dtse':
+    case 'dtsh':
+    case 'dtsl':
+    case 'dtsx':
+    case 'ipcm':
+    case 'fpcm':
+    case 'alac':
     case 'stpp':
     case 'wvtt':
     case 'tx3g':

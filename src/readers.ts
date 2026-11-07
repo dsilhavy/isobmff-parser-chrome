@@ -1,5 +1,4 @@
 import {
-  createVisualSampleEntryReader,
   defaultReaderConfig,
   type IsoBoxReadView,
   type IsoBoxReadViewConfig,
@@ -7,6 +6,7 @@ import {
   type SampleAuxiliaryInformationSizesBox,
   type SampleEncryptionBox,
 } from '@svta/cml-iso-bmff';
+import { mediaReaders } from './readers-media';
 
 type Body<T> = Omit<T, 'type'>;
 type Aux<T> = Omit<Body<T>, 'auxInfoType'> & { auxInfoType?: string }; // library types it as number; the fourcc reads better
@@ -242,12 +242,11 @@ function readDOps(view: IsoBoxReadView) {
   };
 }
 
-/** Library defaults plus readers it lacks: VP9/AV1 sample entries, CENC sample boxes, codec configuration records. */
+/** Library defaults plus readers it lacks: more sample entries and their extension boxes, CENC sample boxes, codec configuration records. */
 export const readerConfig: IsoBoxReadViewConfig = {
   readers: {
     ...defaultReaderConfig().readers,
-    vp09: createVisualSampleEntryReader('vp09'),
-    av01: createVisualSampleEntryReader('av01'),
+    ...mediaReaders,
     senc: readSenc,
     saiz: readSaiz,
     saio: readSaio,
