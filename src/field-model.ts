@@ -43,13 +43,25 @@ const LAYOUTS: Record<string, Layout> = {
   styp: () => [['majorBrand', 4], ['minorVersion', 4], ['compatibleBrands', -1]],
   hdlr: () => [['preDefined', 4], ['handlerType', 4], ['reserved', 12], ['name', -1]],
   elst: () => [['entryCount', 4], ['entries', -1]],
+  btrt: () => [['bufferSizeDB', 4], ['maxBitrate', 4], ['avgBitrate', 4]],
+  pasp: () => [['hSpacing', 4], ['vSpacing', 4]],
+  clap: () => [
+    ['cleanApertureWidthN', 4], ['cleanApertureWidthD', 4], ['cleanApertureHeightN', 4], ['cleanApertureHeightD', 4],
+    ['horizOffN', 4], ['horizOffD', 4], ['vertOffN', 4], ['vertOffD', 4],
+  ],
+  colr: (b) =>
+    b.colourType === 'nclx' || b.colourType === 'nclc'
+      ? [['colourType', 4], ['colourPrimaries', 2], ['transferCharacteristics', 2], ['matrixCoefficients', 2], ['fullRangeFlag', b.fullRangeFlag === undefined ? 0 : 1]]
+      : [['colourType', 4], ['iccProfile', -1]],
+  clli: () => [['maxContentLightLevel', 2], ['maxPicAverageLightLevel', 2]],
+  mdcv: () => [['displayPrimaries', 12], ['whitePointX', 2], ['whitePointY', 2], ['maxDisplayMasteringLuminance', 4], ['minDisplayMasteringLuminance', 4]],
   emsg: (b) =>
     b.version === 1
       ? [['timescale', 4], ['presentationTime', 8], ['eventDuration', 4], ['id', 4], ['schemeIdUri', -1]]
       : [['schemeIdUri', -1]],
 };
 
-const STRING_KEYS = new Set(['type', 'majorBrand', 'handlerType', 'compatibleBrands', 'name', 'language', 'schemeIdUri']);
+const STRING_KEYS = new Set(['type', 'colourType', 'majorBrand', 'handlerType', 'compatibleBrands', 'name', 'language', 'schemeIdUri']);
 const SIGNED_KEYS = new Set(['dataOffset', 'mediaTime']);
 
 function typeOf(key: string, size: number): string {
@@ -94,7 +106,46 @@ const TIME_KEYS = new Set([
 
 const UUID_KEYS = new Set(['kid', 'defaultKid']);
 
-/** Muted annotation after a raw value: seconds for time fields, hex for flags, names/UUIDs for DRM ids. */
+// ITU-T H.273 code points (colr nclx, vpcC)
+const PRIMARIES: Record<number, string> = { 1: 'BT.709', 2: 'unspecified', 4: 'BT.470 M', 5: 'BT.601 625', 6: 'BT.601 525', 7: 'SMPTE 240M', 8: 'generic film', 9: 'BT.2020 / BT.2100', 10: 'SMPTE ST 428 (XYZ)', 11: 'DCI-P3', 12: 'Display P3', 22: 'EBU 3213' };
+const TRANSFER: Record<number, string> = {
+  1: 'BT.709', 2: 'unspecified', 4: 'gamma 2.2', 5: 'gamma 2.8', 6: 'BT.601', 7: 'SMPTE 240M', 8: 'linear', 9: 'log 100:1', 10: 'log 316:1',
+  11: 'IEC 61966-2-4', 12: 'BT.1361', 13: 'sRGB', 14: 'BT.2020 10-bit', 15: 'BT.2020 12-bit', 16: 'PQ (SMPTE ST 2084) · HDR', 17: 'SMPTE ST 428', 18: 'HLG (ARIB STD-B67) · HDR',
+};
+const MATRIX: Record<number, string> = { 0: 'identity (RGB)', 1: 'BT.709', 2: 'unspecified', 4: 'FCC', 5: 'BT.470 BG', 6: 'BT.601', 7: 'SMPTE 240M', 8: 'YCgCo', 9: 'BT.2020 non-constant', 10: 'BT.2020 constant', 11: 'SMPTE ST 2085', 12: 'chroma-derived non-constant', 13: 'chroma-derived constant', 14: 'ICtCp' };
+// ETSI TS 102 366 (dac3/dec3)
+const ACMOD = ['1+1 (dual mono)', '1/0 (mono)', '2/0 (stereo)', '3/0', '2/1', '3/1', '2/2', '3/2'];
+const FSCOD = ['48 kHz', '44.1 kHz', '32 kHz'];
+const BSMOD = ['main', 'music and effects', 'visually impaired', 'hearing impaired', 'dialogue', 'commentary', 'emergency', 'voice over / karaoke'];
+const AC3_KBPS = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640];
+const DV_COMPAT: Record<number, string> = { 0: 'none', 1: 'HDR10', 2: 'SDR', 4: 'HLG', 6: 'BT.1886 (Blu-ray)' };
+const kbps = (n: number) => `${(n / 1000).toLocaleString()} kbit/s`;
+
+/** Names for code points and units, by field name. */
+const NAMED: Record<string, (n: number) => string | undefined> = {
+  colourPrimaries: (n) => PRIMARIES[n],
+  transferCharacteristics: (n) => TRANSFER[n],
+  matrixCoefficients: (n) => MATRIX[n],
+  fullRangeFlag: (n) => (n ? 'full range' : 'limited (video) range'),
+  acmod: (n) => ACMOD[n],
+  fscod: (n) => FSCOD[n],
+  bsmod: (n) => BSMOD[n],
+  lfeon: (n) => (n ? '+ LFE' : 'no LFE'),
+  bitRateCode: (n) => (AC3_KBPS[n] ? `${AC3_KBPS[n]} kbit/s` : undefined),
+  dataRate: (n) => `${n} kbit/s`,
+  flagEc3ExtensionTypeA: (n) => (n ? 'Dolby Atmos (JOC)' : undefined),
+  dvBlSignalCompatibilityId: (n) => DV_COMPAT[n],
+  maxBitrate: kbps,
+  avgBitrate: kbps,
+  maxDisplayMasteringLuminance: (n) => `${n / 10000} cd/m²`,
+  minDisplayMasteringLuminance: (n) => `${n / 10000} cd/m²`,
+  maxContentLightLevel: (n) => `${n} cd/m²`,
+  maxPicAverageLightLevel: (n) => `${n} cd/m²`,
+  whitePointX: (n) => `x = ${(n * 0.00002).toFixed(4)}`,
+  whitePointY: (n) => `y = ${(n * 0.00002).toFixed(4)}`,
+};
+
+/** Muted annotation after a raw value: seconds for time fields, hex for flags, names/UUIDs for DRM ids, code point names. */
 export function derived(key: string, value: unknown, timescale: number | undefined): string | undefined {
   if (Array.isArray(value) && value.length && value.length % 16 === 0 && (key === 'systemId' || UUID_KEYS.has(key))) {
     const uuids: string[] = [];
@@ -105,5 +156,5 @@ export function derived(key: string, value: unknown, timescale: number | undefin
   if (typeof value !== 'number') return undefined;
   if (key === 'flags') return `0x${value.toString(16).padStart(6, '0')}`;
   if (TIME_KEYS.has(key) && timescale) return `= ${(value / timescale).toFixed(3)} s @ ${timescale} Hz`;
-  return undefined;
+  return NAMED[key]?.(value);
 }

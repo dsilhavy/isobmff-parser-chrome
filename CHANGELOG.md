@@ -2,6 +2,20 @@
 
 All notable changes to this project are documented here. Versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- Sample entries `ac-3`, `ec-3`, `ac-4`, `Opus`, `fLaC`, MPEG-H, DTS, PCM, ALAC, Dolby Vision, VVC, `stpp` and `wvtt`, so their child boxes are decoded
+- Configuration boxes `dac3`, `dec3` (Dolby Atmos JOC flag), `dac4`, `dfLa`, `mhaC`, `dvcC`/`dvvC`/`dvwC` and `vvcC`
+- Sample entry extensions `btrt`, `pasp`, `clap`, `colr`, `clli`, `mdcv` and `chnl`, with hex field maps for the fixed-size ones
+- Readable names for colour primaries, transfer (PQ/HLG), matrix, AC-3 channel modes, sample rates and bitrates
+- Codec strings for AC-4, Dolby Vision, VVC and MPEG-H
+
+### Changed
+
+- Opus and FLAC codec strings are now `opus` and `flac` (as their ISOBMFF bindings specify) instead of the sample entry type
+
 ## [1.0.0] - 2026-11-04
 
 First release.

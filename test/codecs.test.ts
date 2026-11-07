@@ -71,7 +71,7 @@ test('codecString: AV1, VP9, AAC, others', () => {
   assert.equal(codecString(box('mp4a', {}, [box('esds', { objectTypeIndication: 0x40, audioObjectType: 2 })])), 'mp4a.40.2');
   assert.equal(codecString(box('mp4a', {}, [box('esds', { objectTypeIndication: 0x40, audioObjectType: 29 })])), 'mp4a.40.29');
   assert.equal(codecString(box('mp4a', {}, [box('esds', { objectTypeIndication: 0x6b })])), 'mp4a.6B');
-  assert.equal(codecString(box('Opus', {}, [box('dOps')])), 'Opus');
+  assert.equal(codecString(box('Opus', {}, [box('dOps')])), 'opus');
   assert.equal(codecString(box('ec-3')), 'ec-3');
   assert.equal(codecString(box('stpp')), 'stpp');
   assert.equal(codecString(box('avc1')), undefined);
