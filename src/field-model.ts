@@ -119,6 +119,8 @@ const FSCOD = ['48 kHz', '44.1 kHz', '32 kHz'];
 const BSMOD = ['main', 'music and effects', 'visually impaired', 'hearing impaired', 'dialogue', 'commentary', 'emergency', 'voice over / karaoke'];
 const AC3_KBPS = [32, 40, 48, 56, 64, 80, 96, 112, 128, 160, 192, 224, 256, 320, 384, 448, 512, 576, 640];
 const DV_COMPAT: Record<number, string> = { 0: 'none', 1: 'HDR10', 2: 'SDR', 4: 'HLG', 6: 'BT.1886 (Blu-ray)' };
+// ISO/IEC 14496-12 Annex I
+const SAP_TYPES: Record<number, string> = { 1: 'closed GOP, decode order = presentation order', 2: 'closed GOP, reordered', 3: 'open GOP: leading pictures not decodable', 4: 'gradual decoding refresh (GDR)', 5: 'undecodable picture after T_DEC (T_DEC earliest from I_SAU)', 6: 'undecodable picture after T_DEC (T_DEC not earliest)' };
 const kbps = (n: number) => `${(n / 1000).toLocaleString()} kbit/s`;
 
 /** Names for code points and units, by field name. */
@@ -135,6 +137,10 @@ const NAMED: Record<string, (n: number) => string | undefined> = {
   dataRate: (n) => `${n} kbit/s`,
   flagEc3ExtensionTypeA: (n) => (n ? 'Dolby Atmos (JOC)' : undefined),
   dvBlSignalCompatibilityId: (n) => DV_COMPAT[n],
+  sapType: (n) => SAP_TYPES[n],
+  drapType: (n) => SAP_TYPES[n],
+  rollDistance: (n) => (n < 0 ? `${-n} sample${n === -1 ? '' : 's'} before must be decoded` : `correct after ${n} sample${n === 1 ? '' : 's'}`),
+  isProtected: (n) => (n ? 'encrypted' : 'clear'),
   maxBitrate: kbps,
   avgBitrate: kbps,
   maxDisplayMasteringLuminance: (n) => `${n / 10000} cd/m²`,

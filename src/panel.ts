@@ -12,6 +12,7 @@ import { av1ReducedStill, trunSamples, type Codec, type SampleInfo } from './sam
 import { analyze, type Lane } from './continuity';
 import { eventsOf } from './timeline-model';
 import { fieldOffsets } from './field-model';
+import { initGroups } from './sample-groups';
 import type { TrackRunBox } from '@svta/cml-iso-bmff';
 import { groupSegments, kindOf, matches, metaOf, type KindFilter } from './list-model';
 import { saveAll, type Entry } from './save';
@@ -104,7 +105,7 @@ function samplesFor(segment: Segment, trun: ParsedIsoBox): SampleInfo[] | undefi
   // encrypted samples: frame headers are ciphertext, flags-based class only
   const encrypted = !!findBox([traf], 'senc') || !!(lane?.init && findBox(lane.init.boxes, 'tenc'));
   const codec = lane && !encrypted ? codecFor(lane) : undefined;
-  return trunSamples(segment, moof, traf, trun as unknown as TrackRunBox, lane?.trexDefaults, codec);
+  return trunSamples(segment, moof, traf, trun as unknown as TrackRunBox, lane?.trexDefaults, codec, initGroups(lane?.init?.boxes, trackId));
 }
 
 function selectBox(segment: Segment, box: ParsedIsoBox): void {
@@ -176,12 +177,13 @@ const drmHandlers: DrmHandlers = {
   kidInSegments: (kid) => kidSegments.has(kid),
 };
 
-/** KID → newest segment whose tenc/pssh names it (also under the GUID byte order some PlayReady CDMs report). */
+/** KID → newest segment whose tenc/pssh/seig names it (also under the GUID byte order some PlayReady CDMs report). */
 function indexKids(): void {
   kidSegments = new Map();
   for (const segment of segments) {
     for (const k of segmentKids([segment])) {
-      for (const kid of [k.kid, swapUuid(k.kid)]) if (!kidSegments.has(kid) || k.source === 'tenc') kidSegments.set(kid, { segment, box: k.source });
+      const box = k.source === 'seig' ? 'sgpd' : k.source;
+      for (const kid of [k.kid, swapUuid(k.kid)]) if (!kidSegments.has(kid) || k.source === 'tenc') kidSegments.set(kid, { segment, box });
     }
   }
 }
