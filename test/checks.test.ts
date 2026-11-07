@@ -11,9 +11,9 @@ const seg = (boxes: ParsedIsoBox[], error?: string): Segment => ({ url: 'https:/
 const moof = (sizes: (number | undefined)[], tfhdDefault?: number, withTfdt = true) =>
   box('moof', {}, [
     box('traf', {}, [
-      box('tfhd', { trackId: 1, defaultSampleSize: tfhdDefault }),
+      box('tfhd', { trackId: 1, flags: 0x020000, defaultSampleSize: tfhdDefault }),
       ...(withTfdt ? [box('tfdt', { baseMediaDecodeTime: 0 })] : []),
-      box('trun', { samples: sizes.map((sampleSize) => ({ sampleSize })) }),
+      box('trun', { flags: 1, samples: sizes.map((sampleSize) => ({ sampleSize })) }),
     ]),
   ]);
 const mdat = (size: number) => box('mdat', { size: size + 8 });
@@ -40,7 +40,7 @@ test('missing tfdt and parse errors are listed, error first', () => {
 });
 
 test('init: sample entries without a derivable codec string are reported', () => {
-  const stsd = (entry: ParsedIsoBox) => box('moov', {}, [box('trak', {}, [box('mdia', {}, [box('minf', {}, [box('stbl', {}, [box('stsd', { entries: [entry] })])])])])]);
-  assert.deepEqual(warningsOf(seg([stsd(box('dvh1', {}, [box('dvcC')]))])), ["no codec string for sample entry 'dvh1'"]);
-  assert.deepEqual(warningsOf(seg([stsd(box('avc1', {}, [box('avcC', { avcProfileIndication: 66, profileCompatibility: 0, avcLevelIndication: 30 })]))])), []);
+  const stsd = (entry: ParsedIsoBox) => box('moov', {}, [box('mvex'), box('trak', {}, [box('mdia', {}, [box('minf', {}, [box('stbl', {}, [box('stsd', { entries: [entry] })])])])])]);
+  assert.deepEqual(warningsOf(seg([box('ftyp'), stsd(box('dvh1', {}, [box('dvcC')]))])), ["no codec string for sample entry 'dvh1'"]);
+  assert.deepEqual(warningsOf(seg([box('ftyp'), stsd(box('avc1', {}, [box('avcC', { avcProfileIndication: 66, profileCompatibility: 0, avcLevelIndication: 30 })]))])), []);
 });

@@ -99,7 +99,9 @@ test('trafGroupWarnings: sample count mismatch and a dangling fragment-local ind
   assert.deepEqual(trafGroupWarnings(traf), []);
   const bad = parse(bytesOf('traf', tfhd, trun(4), sbgp('seig', [[3, 0x10002]]), sgpdV1('seig', 20, [seig(KID_B)])))[0];
   assert.deepEqual(trafGroupWarnings(bad), ["sbgp 'seig' maps 3 samples, the truns have 4", "sbgp 'seig' refers to fragment-local entry 2, sgpd has 1"]);
-  const seg: Segment = { url: 'https://a/1.m4s', time: new Date(), bytes: new Uint8Array(), boxes: parse(bytesOf('moof', bytesOf('traf', tfhd, bytesOf('tfdt', [0, 0, 0, 0], u32(0)), trun(1), sbgp('roll', [[1, 0x10001]])))) };
+  const trunWithOffset = bytesOf('trun', [0, 0, 0, 1], u32(1), u32(0));
+  const boxes = parse([...bytesOf('moof', bytesOf('traf', tfhd, bytesOf('tfdt', [0, 0, 0, 0], u32(0)), trunWithOffset, sbgp('roll', [[1, 0x10001]]))), ...bytesOf('mdat')]);
+  const seg: Segment = { url: 'https://a/1.m4s', time: new Date(), bytes: new Uint8Array(), boxes };
   assert.deepEqual(warningsOf(seg), ["sbgp 'roll' refers to fragment-local entry 1, no sgpd in the traf"]);
 });
 

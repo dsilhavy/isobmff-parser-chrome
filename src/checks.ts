@@ -1,3 +1,4 @@
+import { dashWarnings } from './dash-checks';
 import { filterIsoBoxes, findIsoBox, isIsoBoxType, type IsoBoxMap } from '@svta/cml-iso-bmff';
 import type { Segment } from './capture';
 import { codecString } from './codecs';
@@ -47,5 +48,6 @@ export function warningsOf(segment: Segment): string[] {
     const sum = sampleBytes(b);
     if (sum !== undefined && sum !== payload) out.push(`mdat ${payload.toLocaleString('en')} B, trun samples sum to ${sum.toLocaleString('en')} B`);
   });
+  out.push(...dashWarnings(segment));
   return out;
 }

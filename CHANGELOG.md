@@ -15,6 +15,9 @@ All notable changes to this project are documented here. Versions follow [Semant
 - Groups column in the `trun` sample table, resolving fragment-local and init (`stbl`) descriptions and the `sgpd` v2 default
 - Warnings for `sbgp` sample totals that differ from the truns and for dangling fragment-local group indexes
 - `seig` KIDs (key rotation) take part in the DRM tab's segment KID check
+- DASH segment-format checks (ISO/IEC 23009-1 6.3.4, 6.3.5.2–6.3.5.5, 6.3.2.1) with the clause in each warning
+- `stsc`, `stco`/`co64`, `stsz` and `stz2` readers
+- Filter keywords `dash` (DASH warnings) and `lmsg` (last segment)
 
 ### Changed
 

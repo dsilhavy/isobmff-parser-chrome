@@ -305,6 +305,47 @@ function readMhaC(view: IsoBoxReadView) {
   return { configurationVersion, mpegh3daProfileLevelIndication, referenceChannelLayout, mpegh3daConfig: view.readData(Math.min(len, view.bytesRemaining)) };
 }
 
+// ---------- sample tables (8.6–8.7): only counts matter for fragmented streams, entries kept for small tables ----------
+
+const MAX_ENTRIES = 1000;
+
+/** SampleToChunkBox 'stsc' (8.7.4) */
+function readStsc(view: IsoBoxReadView) {
+  const { version, flags } = view.readFullBox();
+  const entryCount = view.readUint(4);
+  const entries: { firstChunk: number; samplesPerChunk: number; sampleDescriptionIndex: number }[] = [];
+  for (let i = 0; i < Math.min(entryCount, MAX_ENTRIES) && view.bytesRemaining >= 12; i++) {
+    entries.push({ firstChunk: view.readUint(4), samplesPerChunk: view.readUint(4), sampleDescriptionIndex: view.readUint(4) });
+  }
+  return { version, flags, entryCount, entries };
+}
+
+/** ChunkOffsetBox 'stco' / 'co64' (8.7.5) */
+const chunkOffsets = (size: number) => (view: IsoBoxReadView) => {
+  const { version, flags } = view.readFullBox();
+  const entryCount = view.readUint(4);
+  const chunkOffset: number[] = [];
+  for (let i = 0; i < Math.min(entryCount, MAX_ENTRIES) && view.bytesRemaining >= size; i++) chunkOffset.push(view.readUint(size));
+  return { version, flags, entryCount, chunkOffset };
+};
+
+/** SampleSizeBox 'stsz' (8.7.3.2) */
+function readStsz(view: IsoBoxReadView) {
+  const { version, flags } = view.readFullBox();
+  const sampleSize = view.readUint(4);
+  const sampleCount = view.readUint(4);
+  const entrySize: number[] = [];
+  if (sampleSize === 0) for (let i = 0; i < Math.min(sampleCount, MAX_ENTRIES) && view.bytesRemaining >= 4; i++) entrySize.push(view.readUint(4));
+  return { version, flags, sampleSize, sampleCount, ...(sampleSize === 0 ? { entrySize } : {}) };
+}
+
+/** CompactSampleSizeBox 'stz2' (8.7.3.3); sizes stay packed. */
+function readStz2(view: IsoBoxReadView) {
+  const { version, flags } = view.readFullBox();
+  view.jump(3);
+  return { version, flags, fieldSize: view.readUint(1), sampleCount: view.readUint(4), entrySizes: rest(view) };
+}
+
 export const mediaReaders = {
   ...Object.fromEntries(AUDIO_ENTRIES.map((t) => [t, createAudioSampleEntryReader(t)])),
   ...Object.fromEntries(VISUAL_ENTRIES.map((t) => [t, createVisualSampleEntryReader(t)])),
@@ -327,4 +368,9 @@ export const mediaReaders = {
   dvwC: readDvcC,
   vvcC: readVvcC,
   mhaC: readMhaC,
+  stsc: readStsc,
+  stco: chunkOffsets(4),
+  co64: chunkOffsets(8),
+  stsz: readStsz,
+  stz2: readStz2,
 } as Record<string, (view: IsoBoxReadView) => unknown>;

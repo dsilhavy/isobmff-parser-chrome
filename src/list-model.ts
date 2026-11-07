@@ -1,3 +1,4 @@
+import { isLastSegment } from './dash-checks';
 import { filterIsoBoxes, isIsoBoxType, traverseIsoBoxes, type IsoBoxMap } from '@svta/cml-iso-bmff';
 import type { Segment } from './capture';
 import { warningsOf } from './checks';
@@ -78,6 +79,8 @@ export function matches(segment: Segment, meta: SegmentMeta, query: string, kind
       if (term === 'init' || term === 'media') return meta.kind === term;
       if (term === 'gap' || term === 'overlap') return meta.issue === term;
       if (term === 'warn') return meta.warnings.length > 0;
+      if (term === 'dash') return meta.warnings.some((w) => w.startsWith('DASH '));
+      if (term === 'lmsg') return isLastSegment(segment);
       if (term === 'enc') return meta.encrypted;
       if (meta.handlers.has(term)) return true;
       return url.includes(term);
