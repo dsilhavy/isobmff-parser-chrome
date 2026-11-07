@@ -7,14 +7,19 @@ import { groupSegments, matches, metaOf } from '../src/list-model';
 
 const box = (type: string, fields: Record<string, unknown> = {}, boxes?: unknown[]): ParsedIsoBox =>
   ({ type, ...fields, ...(boxes ? { boxes } : {}) }) as unknown as ParsedIsoBox;
-const seg = (url: string, boxes: ParsedIsoBox[] = [box('moof')], size = 10): Segment =>
+/** DASH 6.3.5.2-conformant fragment: moof-relative addressing, data offset, followed by its mdat. */
+const fragment = (withTfdt = true) => [
+  box('moof', {}, [box('traf', {}, [box('tfhd', { trackId: 1, flags: 0x020000 }), ...(withTfdt ? [box('tfdt')] : []), box('trun', { flags: 1, samples: [] })])]),
+  box('mdat', { size: 8 }),
+];
+const seg = (url: string, boxes: ParsedIsoBox[] = fragment(), size = 10): Segment =>
   ({ url, time: new Date(), bytes: new Uint8Array(size), boxes });
 
 const initSeg = seg('https://a/v/init.mp4', [box('moov', {}, [box('trak', {}, [box('mdia', {}, [box('hdlr', { handlerType: 'vide' })])])])]);
 const m1 = seg('https://a/v/seg_1.m4s');
 const m2 = seg('https://a/v/seg_2.m4s', undefined, 20);
 const a1 = seg('https://a/a/seg_1.m4a');
-const bad = seg('https://a/v/seg_3.m4s', [box('moof', {}, [box('traf', {}, [box('tfhd', { trackId: 1 })])])]); // no tfdt
+const bad = seg('https://a/v/seg_3.m4s', fragment(false)); // no tfdt
 const encInit = seg('https://a/e/init.mp4', [box('moov', {}, [box('trak', {}, [box('mdia', {}, [box('minf', {}, [box('stbl', {}, [box('stsd', {}, [box('encv', {}, [box('sinf', {}, [box('schi', {}, [box('tenc')])])])])])])])])])]);
 const encMedia = seg('https://a/e/seg_1.m4s', [box('moof', {}, [box('traf', {}, [box('senc')])])]);
 const lanes: Lane[] = [
