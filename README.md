@@ -55,7 +55,7 @@ Segments with a parse error, and captures without a `moof` or `moov` (e.g. an on
 
 ### DRM / EME
 
-The **DRM** tab shows the EME workflow of the page: every `requestMediaKeySystemAccess`, `createMediaKeys`, `setServerCertificate`, `setMediaKeys`, `createSession`, `generateRequest` / `load` / `update` / `close` / `remove` and `getStatusForPolicy` call with its arguments, result or rejection and duration, plus the `encrypted`, `waitingforkey`, `message`, `keystatuseschange` and `closed` events. Click **Reload & capture EME** first: EME runs in page JavaScript, so the panel reloads the page with a small hook injected before any page script (no extra permissions; the green dot shows the hook is active). Only the top frame is read.
+The **DRM** tab shows the EME workflow of the page: every `requestMediaKeySystemAccess`, `createMediaKeys`, `setServerCertificate`, `setMediaKeys`, `createSession`, `generateRequest` / `load` / `update` / `close` / `remove` and `getStatusForPolicy` call with its arguments, result or rejection and duration, plus the `encrypted`, `waitingforkey`, `message`, `keystatuseschange` and `closed` events. Click **Reload & capture EME** first: EME runs in page JavaScript, so the panel reloads the page with a small hook injected before any page script (no extra permissions; the green dot shows the hook is active). Only the top frame is read, so a player inside an iframe shows nothing here. While the hook is active the page can see it: it wraps the EME methods and `EventTarget.prototype.addEventListener` and keeps its log in `window.__emeLog`. A normal reload removes it.
 
 Payloads are decoded per key system:
 
@@ -69,7 +69,7 @@ License messages are matched to the network POST that carried them (by body, els
 
 Not covered: edit-list (`elst`) correction of the A/V offset, hex field maps for most of the added boxes, the optional constraint/sub-layer parts of VVC codec strings, and MPD/m3u8-aware init linking (inits are linked to media segments by longest common URL prefix).
 
-Only requests made while DevTools is open are captured (a limitation of the `chrome.devtools.network` API). The panel keeps the last 200 segments.
+Only requests made while DevTools is open are captured (a limitation of the `chrome.devtools.network` API). Capture starts when DevTools opens, so segments downloaded before the **ISOBMFF** tab is first selected are included (up to the last 200). The panel keeps the last 200 segments and clears them when the page navigates or reloads, unless **Preserve log** is ticked.
 
 ## Development
 

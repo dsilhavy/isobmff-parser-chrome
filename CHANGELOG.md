@@ -22,6 +22,14 @@ All notable changes to this project are documented here. Versions follow [Semant
 ### Changed
 
 - Opus and FLAC codec strings are now `opus` and `flac` (as their ISOBMFF bindings specify) instead of the sample entry type
+- Segments are cleared when the page navigates or reloads; tick **Preserve log** to keep them
+- Response bodies are only fetched for requests that can be a segment (not for images, fonts, scripts, stylesheets, documents or textual MIME types)
+- The EME poll slows down while the page has no hook and stops while the panel is hidden
+- Manifest: store-ready description and `minimum_chrome_version` 110
+
+### Fixed
+
+- Segments and license requests downloaded before the ISOBMFF tab was first selected were missed; capture now starts when DevTools opens
 
 ## [1.0.0] - 2026-11-04
 

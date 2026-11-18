@@ -16,6 +16,7 @@
         <button data-kind="all" class="selected">All</button><button data-kind="init">init</button><button data-kind="media">media</button><button data-kind="issues">issues</button>
       </span>
       <button id="arm" hidden title="Reloads the page with a hook that records EME calls before any page script runs"><span id="arm-dot" class="arm-dot"></span>Reload &amp; capture EME</button>
+      <label class="preserve" title="Keep the captured segments when the page navigates or reloads"><input id="preserve" type="checkbox" />Preserve log</label>
       <span id="status"></span>
       <button id="save">Save all</button>
       <button id="clear">Clear</button>
@@ -23,7 +24,7 @@
     <main>
       <section id="segments-pane">
         <div id="segments"></div>
-        <p id="empty">Waiting for media segments… (only requests made while DevTools is open are captured)</p>
+        <p id="empty">Waiting for media segments… (requests are captured from the moment DevTools is opened)</p>
       </section>
       <section id="tree-pane"><div id="tree"></div></section>
       <section id="detail-pane">
