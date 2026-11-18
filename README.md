@@ -6,11 +6,12 @@ Parsing is done with [`@svta/cml-iso-bmff`](https://github.com/streaming-video-t
 
 Codec-independent: any codec packaged in ISOBMFF/CMAF works (AVC, HEVC, VP9, AV1, AAC, ...). WebM/Matroska is a different container (EBML) and is not supported.
 
-Three views in one panel:
+Four views in one panel:
 
 - **Segments**: box tree, decoded fields, hex view, per-track timeline, structural and timing checks, init diff and frame types
 - **Manifest**: captured DASH MPDs with their refresh history, an element outline and the source with line numbers
 - **DRM**: the EME call/event flow with decoded Widevine, PlayReady, ClearKey and FairPlay payloads, matched license requests, key statuses and KID cross-checks against the segments
+- **Report**: every problem found in the captured MPDs and segments in one list, grouped by rule, with severity, spec clause and a link to the place it occurs
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
@@ -61,6 +62,12 @@ The **Manifest** tab lists every DASH MPD the page loads, detected by content (`
 The middle pane shows the main MPD attributes (type, profiles, durations in seconds, availability start and publish time) and an outline of the elements; clicking an element marks its lines in the syntax-highlighted source on the right. An MPD that is not well-formed XML is flagged with the line of the error. **Save all** adds the captured versions under `mpd/<host>/`.
 
 Not yet covered: schema and conformance checks of the MPD, linking segments to their Representation, and a diff between refreshes. MPDs delivered on a single line are shown as they are (no pretty-printing), and the source view stops at 20,000 lines.
+
+### Report
+
+The **Report** tab collects all findings: MPDs that are not well-formed, the structural and DASH segment-format warnings of the Segments view, and gaps or overlaps between consecutive segments. Equal problems are grouped into one row with a count; selecting a row lists where it occurs, and clicking an occurrence opens the segment box or MPD line. The tab label shows the number of distinct errors and warnings.
+
+Each finding has a rule id, a severity (`error` for a "shall" of the specification, `warning` for a "should" or a likely problem, `info` for an observation) and, where one applies, the clause. The filter matches severity, `mpd` / `segment`, clause, rule id and message text.
 
 ### DRM / EME
 

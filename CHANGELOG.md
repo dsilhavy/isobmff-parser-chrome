@@ -20,6 +20,8 @@ All notable changes to this project are documented here. Versions follow [Semant
 - Filter keywords `dash` (DASH warnings) and `lmsg` (last segment)
 - **Manifest** view: captured DASH MPDs (detected by their `MPD` root element) with refresh history, main attributes, an element outline linked to the syntax-highlighted source, and well-formedness errors with their line
 - **Save all** includes the captured MPD versions under `mpd/<host>/`
+- **Report** view: all findings from MPDs and segments in one list, grouped by rule with severity, clause, rule id and count; clicking an occurrence opens the segment box or MPD line
+- Segment checks now have rule ids and severities (DASH segment-format rules are errors)
 
 ### Changed
 
