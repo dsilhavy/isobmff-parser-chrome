@@ -18,9 +18,12 @@ All notable changes to this project are documented here. Versions follow [Semant
 - DASH segment-format checks (ISO/IEC 23009-1 6.3.4, 6.3.5.2–6.3.5.5, 6.3.2.1) with the clause in each warning
 - `stsc`, `stco`/`co64`, `stsz` and `stz2` readers
 - Filter keywords `dash` (DASH warnings) and `lmsg` (last segment)
+- **Manifest** view: captured DASH MPDs (detected by their `MPD` root element) with refresh history, main attributes, an element outline linked to the syntax-highlighted source, and well-formedness errors with their line
+- **Save all** includes the captured MPD versions under `mpd/<host>/`
 
 ### Changed
 
+- Renamed from "ISOBMFF Box Inspector" to **Media Stream Inspector**; the DevTools tab is now **Media Stream**, and saved archives are named `media-stream-capture-<time>.zip`
 - Opus and FLAC codec strings are now `opus` and `flac` (as their ISOBMFF bindings specify) instead of the sample entry type
 - Segments are cleared when the page navigates or reloads; tick **Preserve log** to keep them
 - Response bodies are only fetched for requests that can be a segment (not for images, fonts, scripts, stylesheets, documents or textual MIME types)
@@ -29,7 +32,7 @@ All notable changes to this project are documented here. Versions follow [Semant
 
 ### Fixed
 
-- Segments and license requests downloaded before the ISOBMFF tab was first selected were missed; capture now starts when DevTools opens
+- Segments and license requests downloaded before the panel's tab was first selected were missed; capture now starts when DevTools opens
 
 ## [1.0.0] - 2026-11-04
 

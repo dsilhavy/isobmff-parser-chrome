@@ -692,3 +692,45 @@ main > section:last-child { border-right: 0; }
 .seq-arrow.warn { color: var(--warn); }
 .seq-arrow.bad { color: var(--bad); }
 .seq-empty { padding: 4px 10px; margin: 0; }
+
+/* ---------- manifest ---------- */
+#manifest-main { grid-template-columns: minmax(180px, .8fr) minmax(220px, 1.2fr) minmax(300px, 2.4fr); }
+#mpd-empty { color: var(--muted); padding: 8px; }
+.mpd-count { flex: none; color: var(--muted); font-size: 11px; }
+.mpd-count + .seg-dot, .mpd-count + .seg-error { margin-left: 0; }
+.seg-row .mpd-count { margin-left: auto; }
+.mpd-summary { margin: 6px 8px; grid-template-columns: 180px 1fr; }
+.mpd-summary .fields-raw { white-space: pre-wrap; }
+.mpd-tree { padding-bottom: 8px; }
+.mpd-el { color: var(--accent); flex: none; }
+.mpd-more { color: var(--muted); cursor: default; }
+.mpd-meta { margin-left: auto; flex: none; }
+.mpd-errors { border-bottom: 1px solid var(--border); }
+.mpd-error { padding: 3px 8px; color: var(--bad); cursor: pointer; }
+.mpd-error:hover { background: var(--hover); }
+.mpd-source { font: 11px ui-monospace, monospace; line-height: 15px; padding: 4px 0; }
+.src-chunk { content-visibility: auto; contain-intrinsic-size: auto 1500px; }
+.src-line { display: flex; }
+.src-line.hl { background: var(--selected); }
+.src-line.error { background: color-mix(in srgb, var(--bad) 18%, transparent); }
+.src-no {
+  flex: none;
+  width: calc(var(--digits, 4) * 1ch + 16px);
+  padding-right: 8px;
+  text-align: right;
+  color: var(--muted);
+  user-select: none;
+}
+.src-text { white-space: pre-wrap; overflow-wrap: anywhere; min-width: 0; }
+.mpd-truncated { color: var(--muted); padding: 4px 8px; margin: 0; }
+.mpd-source {
+  --x-tag: light-dark(#881280, #5db0d7);
+  --x-attr: light-dark(#994500, #9bbbdc);
+  --x-value: light-dark(#1a1aa6, #f29766);
+  --x-comment: light-dark(#236e25, #8b949e);
+}
+.x-tag { color: var(--x-tag); }
+.x-attr { color: var(--x-attr); }
+.x-value { color: var(--x-value); }
+.x-comment { color: var(--x-comment); font-style: italic; }
+.x-punct, .x-meta { color: var(--muted); }

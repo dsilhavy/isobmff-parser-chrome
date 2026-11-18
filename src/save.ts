@@ -46,6 +46,12 @@ export function entriesFor(segments: Segment[]): Entry[] {
   }));
 }
 
+/** Captured MPD versions as `mpd/<host>/<index>-<filename>`, in capture order. */
+export function mpdEntries(mpds: { url: string; text: string }[]): Entry[] {
+  const encoder = new TextEncoder();
+  return mpds.map((m, i) => ({ path: `mpd/${hostOf(m.url)}/${nameOf(m.url, i)}`, bytes: encoder.encode(m.text) }));
+}
+
 function dosDateTime(d: Date): [time: number, date: number] {
   return [
     (d.getHours() << 11) | (d.getMinutes() << 5) | (d.getSeconds() >> 1),
@@ -124,7 +130,7 @@ function downloadZip(entries: Entry[]): void {
   const url = URL.createObjectURL(buildZip(entries));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `isobmff-segments-${stamp}.zip`;
+  a.download = `media-stream-capture-${stamp}.zip`;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
@@ -156,7 +162,7 @@ export async function saveAll(segments: Segment[], extra: Entry[] = []): Promise
   if (picker) {
     let root: FileSystemDirectoryHandle | null = null;
     try {
-      root = await picker.call(window, { id: 'isobmff-segments', mode: 'readwrite' });
+      root = await picker.call(window, { id: 'media-stream-capture', mode: 'readwrite' });
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') return 'save cancelled';
       root = null; // blocked in this context — fall through to the zip

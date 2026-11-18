@@ -7,8 +7,8 @@
   </head>
   <body>
     <header>
-      <strong>ISOBMFF Box Inspector</strong>
-      <span class="seg" id="view"><button data-view="segments" class="selected">Segments</button><button data-view="drm">DRM</button></span>
+      <strong>Media Stream Inspector</strong>
+      <span class="seg" id="view"><button data-view="segments" class="selected">Segments</button><button data-view="manifest">Manifest</button><button data-view="drm">DRM</button></span>
       <span id="count">0 segments</span>
       <span class="divider"></span>
       <label class="filter"><span class="filter-icon">⌕</span><input id="filter" type="search" placeholder="Filter · name, url, track…" spellcheck="false" /></label>
@@ -21,7 +21,7 @@
       <button id="save">Save all</button>
       <button id="clear">Clear</button>
     </header>
-    <main>
+    <main id="segments-main">
       <section id="segments-pane">
         <div id="segments"></div>
         <p id="empty">Waiting for media segments… (requests are captured from the moment DevTools is opened)</p>
@@ -31,6 +31,14 @@
         <div id="fields"></div>
         <div id="hex"></div>
       </section>
+    </main>
+    <main id="manifest-main" hidden>
+      <section id="mpd-list-pane">
+        <div id="mpd-list"></div>
+        <p id="mpd-empty" class="empty">Waiting for an MPD… (requests are captured from the moment DevTools is opened)</p>
+      </section>
+      <section id="mpd-outline-pane"><div id="mpd-outline"></div></section>
+      <section id="mpd-source-pane"><div id="mpd-source"></div></section>
     </main>
     <main id="drm-main" hidden>
       <section id="drm-flow-pane">

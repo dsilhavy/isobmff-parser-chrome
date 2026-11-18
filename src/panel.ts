@@ -16,7 +16,9 @@ import { fieldOffsets } from './field-model';
 import { initGroups } from './sample-groups';
 import type { TrackRunBox } from '@svta/cml-iso-bmff';
 import { groupSegments, kindOf, matches, metaOf, type KindFilter } from './list-model';
-import { saveAll, type Entry } from './save';
+import { mpdEntries, saveAll, type Entry } from './save';
+import { addMpd, type MpdEntry, type Snapshot } from './mpd/store';
+import { renderMpdList, renderMpdOutline, renderMpdSource, type ManifestHandlers, type SourceView } from './render/manifest';
 import { armHook, startEmePolling } from './eme/capture';
 import { buildModel, exportLog, segmentKids, type EmeModel } from './eme/model';
 import { swapUuid } from './eme/bytes';
@@ -42,7 +44,13 @@ const viewEl = $('view');
 const armEl = $('arm') as HTMLButtonElement;
 const armDotEl = $('arm-dot');
 const preserveEl = $('preserve') as HTMLInputElement;
-const segmentsMainEl = document.querySelector('main:not(#drm-main)') as HTMLElement;
+const segmentsMainEl = $('segments-main');
+const manifestMainEl = $('manifest-main');
+const mpdListEl = $('mpd-list');
+const mpdEmptyEl = $('mpd-empty');
+const mpdOutlineEl = $('mpd-outline');
+const mpdSourceEl = $('mpd-source');
+const filterLabelEl = filterEl.closest('label') as HTMLElement;
 const drmMainEl = $('drm-main');
 const timelinePaneEl = $('timeline-pane');
 const drmSeqPaneEl = $('drm-seq-pane');
@@ -62,7 +70,7 @@ let lanes: Lane[] = [];
 let lastBoxType: string | null = null; // re-opened in the next selected segment when present
 let panelVisible = true; // the panel page is first loaded when its tab is shown
 
-type View = 'segments' | 'drm';
+type View = 'segments' | 'manifest' | 'drm';
 let view: View = 'segments';
 const emeEvents: RawEvent[] = [];
 const exchanges: NetExchange[] = [];
@@ -72,6 +80,16 @@ let drmFilter = '';
 let armed = false;
 let drmDetailKey = ''; // detail pane is re-rendered only when this changes (keeps scroll + hex)
 let kidSegments = new Map<string, { segment: Segment; box: string }>();
+
+const mpds: MpdEntry[] = [];
+let mpdUrl: string | null = null; // selected MPD; null = the first captured
+let mpdSnapshotId: number | null = null; // null = follow the newest refresh
+let mpdPath: string | null = null; // selected element in the outline
+const mpdToggled = new Set<string>();
+let mpdShown: Snapshot | undefined; // snapshot the outline and source currently show
+let mpdSource: SourceView = { highlight: () => undefined };
+
+const nothingToSave = () => segments.length === 0 && emeEvents.length === 0 && mpds.length === 0;
 
 /** Timescale for the time fields of `box`: its own `timescale` field, else the one lane timescale this segment belongs to. */
 function timescaleFor(segment: Segment, box: ParsedIsoBox): number | undefined {
@@ -120,6 +138,7 @@ function selectBox(segment: Segment, box: ParsedIsoBox): void {
 
 function refresh(): void {
   if (view === 'drm') return refreshDrm();
+  if (view === 'manifest') return refreshManifest();
   lanes = analyze(segments);
   const meta = metaOf(segments, lanes);
   const visible = segments.filter((s) => matches(s, meta.get(s)!, filter, kindFilter));
@@ -128,7 +147,7 @@ function refresh(): void {
     ? 'No segments match the filter.'
     : 'Waiting for media segments… (requests are captured from the moment DevTools is opened)';
   emptyEl.style.display = visible.length ? 'none' : '';
-  saveEl.disabled = segments.length === 0 && emeEvents.length === 0;
+  saveEl.disabled = nothingToSave();
   renderList(listEl, groupSegments(visible, meta), meta, selected, collapsedGroups, selectSegment, (template) => {
     if (!collapsedGroups.delete(template)) collapsedGroups.add(template);
     refresh();
@@ -158,6 +177,51 @@ function selectSegment(segment: Segment, open?: string): void {
   const type = open ?? lastBoxType;
   const box = type ? findBox(segment.boxes, type) : undefined;
   if (box) selectBox(segment, box);
+}
+
+// ---------- Manifest view ----------
+
+const manifestHandlers: ManifestHandlers = {
+  onSelect: (url, snapshotId) => {
+    mpdUrl = url;
+    mpdSnapshotId = snapshotId;
+    refreshManifest();
+  },
+  onElement: (path, element) => {
+    mpdPath = path;
+    renderMpdOutline(mpdOutlineEl, mpdShown, mpdPath, mpdToggled, manifestHandlers);
+    mpdSource.highlight(element.line, element.endLine);
+  },
+  onToggle: (path) => {
+    if (!mpdToggled.delete(path)) mpdToggled.add(path);
+    renderMpdOutline(mpdOutlineEl, mpdShown, mpdPath, mpdToggled, manifestHandlers);
+  },
+};
+
+function refreshManifest(): void {
+  const entry = mpds.find((e) => e.url === mpdUrl) ?? mpds[0];
+  const snapshot = entry?.snapshots.find((s) => s.id === mpdSnapshotId) ?? entry?.snapshots.at(-1);
+  if (snapshot && snapshot !== entry?.snapshots.find((s) => s.id === mpdSnapshotId)) mpdSnapshotId = null; // the chosen version left the history
+  const total = mpds.reduce((n, e) => n + e.refreshes, 0);
+  countEl.textContent = `${mpds.length} MPD${mpds.length === 1 ? '' : 's'} · ${total} response${total === 1 ? '' : 's'}`;
+  mpdEmptyEl.style.display = mpds.length ? 'none' : '';
+  saveEl.disabled = nothingToSave();
+  renderMpdList(mpdListEl, mpds, snapshot, mpdSnapshotId === null, manifestHandlers);
+  if (snapshot !== mpdShown) {
+    // a new version: the outline keeps its open/closed state and selection by path, the source is rebuilt
+    mpdShown = snapshot;
+    renderMpdOutline(mpdOutlineEl, snapshot, mpdPath, mpdToggled, manifestHandlers);
+    mpdSource = renderMpdSource(mpdSourceEl, entry, snapshot);
+  }
+  updateViewButtons();
+}
+
+function clearMpds(): void {
+  mpds.length = 0;
+  mpdUrl = mpdSnapshotId = mpdPath = null;
+  mpdToggled.clear();
+  if (view === 'manifest') refreshManifest();
+  else updateViewButtons();
 }
 
 // ---------- DRM / EME view ----------
@@ -205,7 +269,7 @@ function refreshDrm(): void {
     renderDrmDetail(drmDetailEl, drmHexEl, emeModel, drmSelected, armed, drmHandlers);
   }
   renderDrmSequence(drmSeqEl, drmSeqSummaryEl, emeModel, drmSelected, drmHandlers);
-  saveEl.disabled = segments.length === 0 && emeEvents.length === 0;
+  saveEl.disabled = nothingToSave();
   updateViewButtons();
 }
 
@@ -213,6 +277,7 @@ function updateViewButtons(): void {
   const drmBtn = viewEl.querySelector<HTMLElement>('button[data-view="drm"]')!;
   const calls = emeEvents.filter((e) => e.kind === 'call' || e.kind === 'event').length;
   drmBtn.textContent = calls ? `DRM · ${calls}` : 'DRM';
+  viewEl.querySelector<HTMLElement>('button[data-view="manifest"]')!.textContent = mpds.length ? `Manifest · ${mpds.length}` : 'Manifest';
   armDotEl.classList.toggle('on', armed);
   armEl.title = armed ? 'EME hook active on this page. Click to reload and start a fresh capture.' : 'Reloads the page with a hook that records EME calls before any page script runs';
 }
@@ -221,9 +286,11 @@ function setView(v: View): void {
   view = v;
   viewEl.querySelectorAll<HTMLElement>('button').forEach((b) => b.classList.toggle('selected', b.dataset.view === v));
   const drm = v === 'drm';
-  segmentsMainEl.hidden = drm;
-  timelinePaneEl.hidden = drm;
-  kindEl.hidden = drm;
+  segmentsMainEl.hidden = v !== 'segments';
+  timelinePaneEl.hidden = v !== 'segments';
+  kindEl.hidden = v !== 'segments';
+  manifestMainEl.hidden = v !== 'manifest';
+  filterLabelEl.hidden = v === 'manifest'; // ponytail: no filter in the Manifest view yet
   drmMainEl.hidden = !drm;
   drmSeqPaneEl.hidden = !drm;
   armEl.hidden = !drm;
@@ -316,8 +383,14 @@ function onCapture(foreign: CaptureEvent): void {
     exchanges.push(e.exchange);
     if (exchanges.length > MAX_EXCHANGES) exchanges.splice(0, exchanges.length - MAX_EXCHANGES);
     if (view === 'drm') refreshDrm();
-  } else if (!preserveEl.checked && segments.length) {
-    clearSegments(); // the page navigated or reloaded
+  } else if (e.type === 'mpd') {
+    addMpd(mpds, e.mpd);
+    if (view === 'manifest') refreshManifest();
+    else updateViewButtons();
+  } else if (!preserveEl.checked) {
+    // the page navigated or reloaded
+    if (segments.length) clearSegments();
+    if (mpds.length) clearMpds();
   }
 }
 
@@ -357,11 +430,11 @@ saveEl.addEventListener('click', async () => {
   saveEl.disabled = true;
   statusEl.textContent = 'saving…';
   try {
-    statusEl.textContent = await saveAll(segments, emeEntries());
+    statusEl.textContent = await saveAll(segments, [...mpdEntries(mpds.flatMap((m) => m.snapshots.map((s) => ({ url: m.url, text: s.text })))), ...emeEntries()]);
   } catch (e) {
     statusEl.textContent = `save failed: ${e instanceof Error ? e.message : String(e)}`;
   } finally {
-    saveEl.disabled = segments.length === 0 && emeEvents.length === 0;
+    saveEl.disabled = nothingToSave();
   }
 });
 
@@ -373,6 +446,11 @@ $('clear').addEventListener('click', () => {
     statusEl.textContent = '';
     drmHexEl.replaceChildren();
     refresh();
+    return;
+  }
+  if (view === 'manifest') {
+    statusEl.textContent = '';
+    clearMpds();
     return;
   }
   clearSegments();

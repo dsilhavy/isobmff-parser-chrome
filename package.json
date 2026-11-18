@@ -1,7 +1,7 @@
 {
-  "name": "isobmff-parser-chrome",
+  "name": "media-stream-inspector",
   "version": "1.0.0",
-  "description": "Chrome DevTools panel that parses the ISOBMFF box structure of media segments",
+  "description": "Chrome DevTools panel for debugging media streams: DASH MPDs, ISOBMFF segments and DRM (EME)",
   "main": "index.js",
   "scripts": {
     "build": "vite build",
