@@ -18,6 +18,9 @@ import type { TrackRunBox } from '@svta/cml-iso-bmff';
 import { groupSegments, kindOf, matches, metaOf, type KindFilter } from './list-model';
 import { mpdEntries, saveAll, type Entry } from './save';
 import { addMpd, type MpdEntry, type Snapshot } from './mpd/store';
+import { collectFindings, groupFindings, matchesGroup, severityCounts, type Finding } from './findings';
+import { issuesOf } from './checks';
+import { renderReportDetail, renderReportList, type ReportHandlers } from './render/report';
 import { renderMpdList, renderMpdOutline, renderMpdSource, type ManifestHandlers, type SourceView } from './render/manifest';
 import { armHook, startEmePolling } from './eme/capture';
 import { buildModel, exportLog, segmentKids, type EmeModel } from './eme/model';
@@ -51,6 +54,10 @@ const mpdEmptyEl = $('mpd-empty');
 const mpdOutlineEl = $('mpd-outline');
 const mpdSourceEl = $('mpd-source');
 const filterLabelEl = filterEl.closest('label') as HTMLElement;
+const reportMainEl = $('report-main');
+const reportListEl = $('report-list');
+const reportEmptyEl = $('report-empty');
+const reportDetailEl = $('report-detail');
 const drmMainEl = $('drm-main');
 const timelinePaneEl = $('timeline-pane');
 const drmSeqPaneEl = $('drm-seq-pane');
@@ -70,7 +77,7 @@ let lanes: Lane[] = [];
 let lastBoxType: string | null = null; // re-opened in the next selected segment when present
 let panelVisible = true; // the panel page is first loaded when its tab is shown
 
-type View = 'segments' | 'manifest' | 'drm';
+type View = 'segments' | 'manifest' | 'drm' | 'report';
 let view: View = 'segments';
 const emeEvents: RawEvent[] = [];
 const exchanges: NetExchange[] = [];
@@ -88,6 +95,9 @@ let mpdPath: string | null = null; // selected element in the outline
 const mpdToggled = new Set<string>();
 let mpdShown: Snapshot | undefined; // snapshot the outline and source currently show
 let mpdSource: SourceView = { highlight: () => undefined };
+
+let reportFilter = '';
+let reportSelected: string | null = null; // key of the selected finding group
 
 const nothingToSave = () => segments.length === 0 && emeEvents.length === 0 && mpds.length === 0;
 
@@ -139,6 +149,7 @@ function selectBox(segment: Segment, box: ParsedIsoBox): void {
 function refresh(): void {
   if (view === 'drm') return refreshDrm();
   if (view === 'manifest') return refreshManifest();
+  if (view === 'report') return refreshReport();
   lanes = analyze(segments);
   const meta = metaOf(segments, lanes);
   const visible = segments.filter((s) => matches(s, meta.get(s)!, filter, kindFilter));
@@ -153,6 +164,7 @@ function refresh(): void {
     refresh();
   });
   renderTimeline(timelineEl, timelineSummaryEl, lanes, eventsOf(segments, lanes), selected, selectSegment);
+  updateViewButtons(); // Report count
 }
 
 /** Other init segments, most recent first, offered for a field diff when `segment` is an init. */
@@ -224,6 +236,48 @@ function clearMpds(): void {
   else updateViewButtons();
 }
 
+// ---------- Report view ----------
+
+const allGroups = () => groupFindings(collectFindings(segments, lanes, mpds, issuesOf));
+
+/** Opens the Manifest view on one version of an MPD, optionally marking a line. */
+function openMpd(url: string, snapshotId: number, line?: number): void {
+  const entry = mpds.find((e) => e.url === url);
+  if (!entry) return;
+  mpdUrl = url;
+  mpdSnapshotId = entry.snapshots.at(-1)?.id === snapshotId ? null : snapshotId;
+  setView('manifest');
+  if (line !== undefined) mpdSource.highlight(line);
+}
+
+const reportHandlers: ReportHandlers = {
+  onGroup: (key) => {
+    reportSelected = key;
+    refreshReport();
+  },
+  onOpen: (finding: Finding) => {
+    const at = finding.location;
+    if (at.kind === 'mpd') return openMpd(at.url, at.snapshotId, at.line);
+    setView('segments');
+    selectSegment(at.segment, at.box);
+  },
+};
+
+function refreshReport(): void {
+  lanes = analyze(segments);
+  const groups = allGroups();
+  const visible = groups.filter((g) => matchesGroup(g, reportFilter));
+  const n = severityCounts(groups);
+  countEl.textContent = groups.length ? `${n.error} error${n.error === 1 ? '' : 's'} · ${n.warning} warning${n.warning === 1 ? '' : 's'} · ${n.info} info` : 'no findings';
+  reportEmptyEl.textContent = groups.length ? 'No findings match the filter.' : segments.length || mpds.length ? 'No findings in the captured MPDs and segments.' : 'Nothing captured yet.';
+  reportEmptyEl.style.display = visible.length ? 'none' : '';
+  if (!visible.some((g) => g.key === reportSelected)) reportSelected = visible[0]?.key ?? null;
+  renderReportList(reportListEl, visible, reportSelected, reportHandlers);
+  renderReportDetail(reportDetailEl, visible.find((g) => g.key === reportSelected), reportHandlers);
+  saveEl.disabled = nothingToSave();
+  updateViewButtons();
+}
+
 // ---------- DRM / EME view ----------
 
 const drmHandlers: DrmHandlers = {
@@ -278,6 +332,11 @@ function updateViewButtons(): void {
   const calls = emeEvents.filter((e) => e.kind === 'call' || e.kind === 'event').length;
   drmBtn.textContent = calls ? `DRM · ${calls}` : 'DRM';
   viewEl.querySelector<HTMLElement>('button[data-view="manifest"]')!.textContent = mpds.length ? `Manifest · ${mpds.length}` : 'Manifest';
+  // distinct errors and warnings; gap/overlap findings are as fresh as the last Segments or Report refresh
+  const n = severityCounts(allGroups());
+  const reportBtn = viewEl.querySelector<HTMLElement>('button[data-view="report"]')!;
+  reportBtn.textContent = n.error + n.warning ? `Report · ${n.error + n.warning}` : 'Report';
+  reportBtn.classList.toggle('has-errors', n.error > 0);
   armDotEl.classList.toggle('on', armed);
   armEl.title = armed ? 'EME hook active on this page. Click to reload and start a fresh capture.' : 'Reloads the page with a hook that records EME calls before any page script runs';
 }
@@ -291,11 +350,12 @@ function setView(v: View): void {
   kindEl.hidden = v !== 'segments';
   manifestMainEl.hidden = v !== 'manifest';
   filterLabelEl.hidden = v === 'manifest'; // ponytail: no filter in the Manifest view yet
+  reportMainEl.hidden = v !== 'report';
   drmMainEl.hidden = !drm;
   drmSeqPaneEl.hidden = !drm;
   armEl.hidden = !drm;
-  filterEl.value = drm ? drmFilter : filter;
-  filterEl.placeholder = drm ? 'Filter · name, widevine, error, kid:…, s:1' : 'Filter · name, url, track…';
+  filterEl.value = drm ? drmFilter : v === 'report' ? reportFilter : filter;
+  filterEl.placeholder = drm ? 'Filter · name, widevine, error, kid:…, s:1' : v === 'report' ? 'Filter · error, warning, mpd, segment, clause, text…' : 'Filter · name, url, track…';
   drmDetailKey = '';
   statusEl.textContent = '';
   refresh();
@@ -414,6 +474,7 @@ panelWindow.__isobmffReady = connect;
 
 filterEl.addEventListener('input', () => {
   if (view === 'drm') drmFilter = filterEl.value;
+  else if (view === 'report') reportFilter = filterEl.value;
   else filter = filterEl.value;
   refresh();
 });
@@ -453,6 +514,7 @@ $('clear').addEventListener('click', () => {
     clearMpds();
     return;
   }
+  if (view === 'report') clearMpds(); // the report covers MPDs and segments: clear both
   clearSegments();
 });
 

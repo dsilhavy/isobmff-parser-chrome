@@ -734,3 +734,44 @@ main > section:last-child { border-right: 0; }
 .x-value { color: var(--x-value); }
 .x-comment { color: var(--x-comment); font-style: italic; }
 .x-punct, .x-meta { color: var(--muted); }
+
+/* ---------- report ---------- */
+#report-main { grid-template-columns: minmax(360px, 3fr) minmax(280px, 2fr); }
+#report-empty { color: var(--muted); padding: 8px; }
+.seg button.has-errors { color: var(--bad); }
+.sev {
+  flex: none;
+  width: 54px;
+  text-align: center;
+  border-radius: 6px;
+  font-size: 10px;
+  line-height: 14px;
+  color: #fff;
+  background: var(--muted);
+}
+.sev.error { background: var(--bad); }
+.sev.warning { background: var(--warn); }
+.rep-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 22px;
+  padding: 2px 8px;
+  cursor: pointer;
+  border-bottom: 1px solid var(--row-border);
+}
+.rep-row:hover, .rep-occ:hover { background: var(--hover); }
+.rep-row.selected { background: var(--selected); }
+.rep-source { flex: none; width: 52px; color: var(--muted); font-size: 11px; }
+.rep-msg { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.rep-clause { flex: none; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.rep-count { flex: none; width: 44px; text-align: right; font: 11px ui-monospace, monospace; color: var(--muted); }
+.rep-detail-head { display: flex; align-items: baseline; gap: 8px; padding: 8px; }
+.rep-detail-msg { overflow-wrap: anywhere; }
+.rep-facts { margin: 0 8px 8px; grid-template-columns: 90px 1fr; }
+.rep-occurrences + .pane-head, #report-detail .pane-head { border-top: 1px solid var(--border); position: static; }
+.rep-occ { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; min-height: 20px; padding: 3px 8px; cursor: pointer; border-bottom: 1px solid var(--row-border); }
+.rep-occ .seg-time { margin-left: auto; }
+.rep-where { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 11px ui-monospace, monospace; }
+.rep-occ-detail { flex: none; width: 100%; color: var(--muted); overflow-wrap: anywhere; }
+.rep-facts .fields-raw { white-space: normal; font-family: system-ui, sans-serif; }

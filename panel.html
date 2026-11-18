@@ -8,7 +8,7 @@
   <body>
     <header>
       <strong>Media Stream Inspector</strong>
-      <span class="seg" id="view"><button data-view="segments" class="selected">Segments</button><button data-view="manifest">Manifest</button><button data-view="drm">DRM</button></span>
+      <span class="seg" id="view"><button data-view="segments" class="selected">Segments</button><button data-view="manifest">Manifest</button><button data-view="drm">DRM</button><button data-view="report">Report</button></span>
       <span id="count">0 segments</span>
       <span class="divider"></span>
       <label class="filter"><span class="filter-icon">⌕</span><input id="filter" type="search" placeholder="Filter · name, url, track…" spellcheck="false" /></label>
@@ -39,6 +39,13 @@
       </section>
       <section id="mpd-outline-pane"><div id="mpd-outline"></div></section>
       <section id="mpd-source-pane"><div id="mpd-source"></div></section>
+    </main>
+    <main id="report-main" hidden>
+      <section id="report-list-pane">
+        <div id="report-list"></div>
+        <p id="report-empty" class="empty"></p>
+      </section>
+      <section id="report-detail-pane"><div id="report-detail"></div></section>
     </main>
     <main id="drm-main" hidden>
       <section id="drm-flow-pane">

@@ -1,4 +1,5 @@
-import { dashWarnings } from './dash-checks';
+import { dashIssues } from './dash-checks';
+import { issueText, type Issue } from './findings';
 import { filterIsoBoxes, findIsoBox, isIsoBoxType, type IsoBoxMap } from '@svta/cml-iso-bmff';
 import type { Segment } from './capture';
 import { codecString } from './codecs';
@@ -26,28 +27,53 @@ function sampleBytes(moof: unknown): number | undefined {
   return total;
 }
 
-/** Structural problems of one segment, human-readable; parse error first. */
-export function warningsOf(segment: Segment): string[] {
-  const out: string[] = [];
-  if (segment.error) out.push(`parse error: ${segment.error}`);
+const cache = new WeakMap<Segment, Issue[]>();
+
+/** Structural problems of one segment; parse error first. Cached: a captured segment does not change. */
+export function issuesOf(segment: Segment): Issue[] {
+  let issues = cache.get(segment);
+  if (!issues) cache.set(segment, (issues = check(segment)));
+  return issues;
+}
+
+/** The same as human-readable one-liners. */
+export const warningsOf = (segment: Segment): string[] => issuesOf(segment).map(issueText);
+
+function check(segment: Segment): Issue[] {
+  const out: Issue[] = [];
+  if (segment.error) out.push({ id: 'segment.parse', severity: 'error', message: 'Segment could not be parsed', detail: segment.error, summary: `parse error: ${segment.error}` });
   for (const stsd of all(segment.boxes, 'stsd')) {
     for (const entry of (stsd.entries ?? []) as { type: string }[]) {
-      if (codecString(entry) === undefined) out.push(`no codec string for sample entry '${entry.type}'`);
+      if (codecString(entry) === undefined) out.push({ id: 'segment.codec-string', severity: 'info', message: 'No codec string can be derived for a sample entry', detail: `sample entry '${entry.type}'`, summary: `no codec string for sample entry '${entry.type}'`, box: 'stsd' });
     }
   }
   const top = segment.boxes as { type: string; size: number; largesize?: number }[];
   top.forEach((b, i) => {
     if (b.type !== 'moof') return;
     for (const traf of all([b], 'traf')) {
-      if (!find([traf], 'tfdt')) out.push('traf without tfdt');
-      out.push(...trafGroupWarnings(traf as unknown as ParsedIsoBox));
+      if (!find([traf], 'tfdt')) out.push({ id: 'segment.tfdt', severity: 'warning', message: "Track fragment without 'tfdt'", detail: 'the decode time of the fragment is unknown, so gaps and overlaps cannot be checked', summary: 'traf without tfdt', box: 'traf' });
+      out.push(
+        ...trafGroupWarnings(traf as unknown as ParsedIsoBox).map((text): Issue => {
+          const count = text.includes(' maps ');
+          return {
+            id: count ? 'segment.sbgp-count' : 'segment.sbgp-index',
+            severity: 'warning',
+            message: count ? "'sbgp' maps a different number of samples than the truns hold" : "'sbgp' refers to a missing fragment-local group description",
+            detail: text,
+            summary: text,
+            box: 'sbgp',
+          };
+        }),
+      );
     }
     const next = top[i + 1];
     if (next?.type !== 'mdat') return;
     const payload = next.largesize !== undefined ? next.largesize - 16 : next.size - 8;
     const sum = sampleBytes(b);
-    if (sum !== undefined && sum !== payload) out.push(`mdat ${payload.toLocaleString('en')} B, trun samples sum to ${sum.toLocaleString('en')} B`);
+    if (sum !== undefined && sum !== payload) {
+      out.push({ id: 'segment.mdat-size', severity: 'warning', message: "mdat size differs from the sum of the 'trun' sample sizes", detail: `mdat ${payload.toLocaleString('en')} B, trun samples sum to ${sum.toLocaleString('en')} B (${Math.abs(payload - sum).toLocaleString('en')} B ${payload > sum ? 'unreferenced' : 'missing'})`, summary: `mdat ${payload.toLocaleString('en')} B, trun samples sum to ${sum.toLocaleString('en')} B`, box: 'trun' });
+    }
   });
-  out.push(...dashWarnings(segment));
+  out.push(...dashIssues(segment));
   return out;
 }
