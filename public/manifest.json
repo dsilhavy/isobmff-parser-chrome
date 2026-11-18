@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "ISOBMFF Box Inspector",
   "version": "1.0.0",
-  "description": "Parses the ISOBMFF box structure of media segments downloaded by media players (dash.js, hls.js, ...)",
+  "description": "DevTools panel that shows the ISOBMFF/MP4 box structure, timeline and DRM (EME) calls of the media segments a page downloads.",
+  "minimum_chrome_version": "110",
   "devtools_page": "devtools.html",
   "icons": {
     "16": "icons/icon-16.png",

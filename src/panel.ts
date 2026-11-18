@@ -1,5 +1,6 @@
 import type { ParsedIsoBox } from '@svta/cml-iso-bmff';
-import { startCapture, type Segment } from './capture';
+import { parseSegment, type Segment } from './capture';
+import { MAX_EXCHANGES, MAX_SEGMENTS, type Bridge, type CaptureEvent } from './bridge';
 import { renderList } from './render/list';
 import { renderTree } from './render/tree';
 import { renderFields } from './render/fields';
@@ -16,13 +17,12 @@ import { initGroups } from './sample-groups';
 import type { TrackRunBox } from '@svta/cml-iso-bmff';
 import { groupSegments, kindOf, matches, metaOf, type KindFilter } from './list-model';
 import { saveAll, type Entry } from './save';
-import { armHook, startEmePolling, startLicenseCapture, MAX_EXCHANGES } from './eme/capture';
+import { armHook, startEmePolling } from './eme/capture';
 import { buildModel, exportLog, segmentKids, type EmeModel } from './eme/model';
 import { swapUuid } from './eme/bytes';
 import type { NetExchange, RawEvent } from './eme/types';
 import { renderDrmDetail, renderDrmList, renderDrmSequence, type DrmHandlers } from './render/drm';
 
-const MAX_SEGMENTS = 200; // ponytail: fixed FIFO cap, make configurable if sessions need more
 const MAX_EME_EVENTS = 5000;
 
 const $ = (id: string) => document.getElementById(id)!;
@@ -41,6 +41,7 @@ const timelineSummaryEl = $('timeline-summary');
 const viewEl = $('view');
 const armEl = $('arm') as HTMLButtonElement;
 const armDotEl = $('arm-dot');
+const preserveEl = $('preserve') as HTMLInputElement;
 const segmentsMainEl = document.querySelector('main:not(#drm-main)') as HTMLElement;
 const drmMainEl = $('drm-main');
 const timelinePaneEl = $('timeline-pane');
@@ -59,6 +60,7 @@ let kindFilter: KindFilter = 'all';
 const collapsedGroups = new Set<string>();
 let lanes: Lane[] = [];
 let lastBoxType: string | null = null; // re-opened in the next selected segment when present
+let panelVisible = true; // the panel page is first loaded when its tab is shown
 
 type View = 'segments' | 'drm';
 let view: View = 'segments';
@@ -124,7 +126,7 @@ function refresh(): void {
   countEl.textContent = `${segments.length} segment${segments.length === 1 ? '' : 's'} · ${lanes.length} track${lanes.length === 1 ? '' : 's'}`;
   emptyEl.textContent = segments.length
     ? 'No segments match the filter.'
-    : 'Waiting for media segments… (only requests made while DevTools is open are captured)';
+    : 'Waiting for media segments… (requests are captured from the moment DevTools is opened)';
   emptyEl.style.display = visible.length ? 'none' : '';
   saveEl.disabled = segments.length === 0 && emeEvents.length === 0;
   renderList(listEl, groupSegments(visible, meta), meta, selected, collapsedGroups, selectSegment, (template) => {
@@ -240,9 +242,10 @@ viewEl.addEventListener('click', (e) => {
 armEl.addEventListener('click', () => {
   statusEl.textContent = 'reloading with EME hook…';
   armHook();
+  poller.expectHook();
 });
 
-startEmePolling(
+const poller = startEmePolling(
   (batch, reset) => {
     if (reset) {
       emeEvents.length = 0;
@@ -261,15 +264,9 @@ startEmePolling(
   },
 );
 
-startLicenseCapture((x) => {
-  exchanges.push(x);
-  if (exchanges.length > MAX_EXCHANGES) exchanges.splice(0, exchanges.length - MAX_EXCHANGES);
-  if (view === 'drm') refreshDrm();
-});
-
 // re-evaluates time-based checks (e.g. a license message never answered) while the page is quiet
 setInterval(() => {
-  if (view === 'drm' && emeEvents.length) refreshDrm();
+  if (panelVisible && view === 'drm' && emeEvents.length) refreshDrm();
 }, 3000);
 
 /** EME log for "Save all": raw hook events plus the matched license exchanges (credential headers redacted). */
@@ -279,14 +276,68 @@ function emeEntries(): Entry[] {
   return [{ path: 'eme/eme-log.json', bytes: new TextEncoder().encode(JSON.stringify(log, null, 2)) }];
 }
 
-startCapture((segment) => {
-  segments.push(segment);
-  if (segments.length > MAX_SEGMENTS) {
-    const dropped = segments.splice(0, segments.length - MAX_SEGMENTS);
-    if (selected && dropped.includes(selected)) selected = null;
-  }
+function clearSegments(): void {
+  segments.length = 0;
+  selected = null;
+  statusEl.textContent = '';
+  treeEl.replaceChildren();
+  fieldsEl.replaceChildren();
+  hexEl.replaceChildren();
   refresh();
+}
+
+// ---------- capture (DevTools page → panel) ----------
+
+const PRESERVE_KEY = 'isobmff.preserveLog';
+try {
+  preserveEl.checked = localStorage.getItem(PRESERVE_KEY) === '1';
+} catch {
+  /* storage unavailable: default (off) */
+}
+preserveEl.addEventListener('change', () => {
+  try {
+    localStorage.setItem(PRESERVE_KEY, preserveEl.checked ? '1' : '0');
+  } catch {
+    /* not persisted */
+  }
 });
+
+/** Events come from the DevTools page, another realm: clone so every object and typed array is one of ours. */
+function onCapture(foreign: CaptureEvent): void {
+  const e = structuredClone(foreign);
+  if (e.type === 'segment') {
+    segments.push(parseSegment(e.segment));
+    if (segments.length > MAX_SEGMENTS) {
+      const dropped = segments.splice(0, segments.length - MAX_SEGMENTS);
+      if (selected && dropped.includes(selected)) selected = null;
+    }
+    refresh();
+  } else if (e.type === 'exchange') {
+    exchanges.push(e.exchange);
+    if (exchanges.length > MAX_EXCHANGES) exchanges.splice(0, exchanges.length - MAX_EXCHANGES);
+    if (view === 'drm') refreshDrm();
+  } else if (!preserveEl.checked && segments.length) {
+    clearSegments(); // the page navigated or reloaded
+  }
+}
+
+function setVisible(v: boolean): void {
+  panelVisible = v;
+  poller.setVisible(v);
+  if (v && view === 'drm') refreshDrm();
+}
+
+type PanelWindow = Window & { __isobmffBridge?: Bridge; __isobmffReady?: () => void };
+const panelWindow = window as PanelWindow;
+let connected = false;
+/** The DevTools page sets `__isobmffBridge` when the panel is shown, before or after this script runs. */
+function connect(): void {
+  const bridge = panelWindow.__isobmffBridge;
+  if (!bridge || connected) return;
+  connected = true;
+  bridge.connect({ event: onCapture, visible: setVisible });
+}
+panelWindow.__isobmffReady = connect;
 
 filterEl.addEventListener('input', () => {
   if (view === 'drm') drmFilter = filterEl.value;
@@ -324,13 +375,8 @@ $('clear').addEventListener('click', () => {
     refresh();
     return;
   }
-  segments.length = 0;
-  selected = null;
-  statusEl.textContent = '';
-  treeEl.replaceChildren();
-  fieldsEl.replaceChildren();
-  hexEl.replaceChildren();
-  refresh();
+  clearSegments();
 });
 
 refresh();
+connect();

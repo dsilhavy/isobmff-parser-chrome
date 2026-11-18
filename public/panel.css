@@ -100,6 +100,8 @@ header > button {
   cursor: pointer;
 }
 header > button:disabled { opacity: .5; cursor: default; }
+.preserve { display: flex; align-items: center; gap: 4px; color: var(--muted); cursor: pointer; }
+.preserve input { margin: 0; }
 #status { color: var(--muted); margin-left: auto; overflow: hidden; text-overflow: ellipsis; }
 
 main {
