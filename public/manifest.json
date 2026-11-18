@@ -1,6 +1,6 @@
 {
   "manifest_version": 3,
-  "name": "ISOBMFF Box Inspector",
+  "name": "Media Stream Inspector",
   "version": "1.0.0",
   "description": "DevTools panel that shows the ISOBMFF/MP4 box structure, timeline and DRM (EME) calls of the media segments a page downloads.",
   "minimum_chrome_version": "110",

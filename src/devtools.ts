@@ -5,7 +5,7 @@ const bridge = startBridge();
 
 type PanelWindow = Window & { __isobmffBridge?: Bridge; __isobmffReady?: () => void };
 
-chrome.devtools.panels.create('ISOBMFF', '', 'panel.html', (panel) => {
+chrome.devtools.panels.create('Media Stream', '', 'panel.html', (panel) => {
   panel.onShown.addListener((win) => {
     const w = win as PanelWindow;
     w.__isobmffBridge = bridge;

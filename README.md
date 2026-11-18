@@ -1,21 +1,22 @@
-# ISOBMFF Box Inspector
+# Media Stream Inspector
 
-Chrome DevTools panel that captures media segments downloaded by media players (dash.js, hls.js, ...) and shows their ISOBMFF box structure: box tree, decoded fields, and a hex view.
+Chrome DevTools panel for debugging media streams. It captures what a media player (dash.js, hls.js, ...) downloads and shows the DASH MPDs, the ISOBMFF box structure of the segments (box tree, decoded fields, hex view) and the DRM (EME) workflow. Formerly "ISOBMFF Box Inspector".
 
 Parsing is done with [`@svta/cml-iso-bmff`](https://github.com/streaming-video-technology-alliance/common-media-library) from the SVTA Common Media Library. Segments are detected by content sniffing (valid top-level box header), so wrong MIME types or missing file extensions don't matter.
 
 Codec-independent: any codec packaged in ISOBMFF/CMAF works (AVC, HEVC, VP9, AV1, AAC, ...). WebM/Matroska is a different container (EBML) and is not supported.
 
-Two views in one panel:
+Three views in one panel:
 
 - **Segments**: box tree, decoded fields, hex view, per-track timeline, structural and timing checks, init diff and frame types
+- **Manifest**: captured DASH MPDs with their refresh history, an element outline and the source with line numbers
 - **DRM**: the EME call/event flow with decoded Widevine, PlayReady, ClearKey and FairPlay payloads, matched license requests, key statuses and KID cross-checks against the segments
 
 See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Install from a release
 
-1. Download `isobmff-inspector-<version>.zip` from the [latest release](https://github.com/dsilhavy/isobmff-parser-chrome/releases/latest) and unzip it
+1. Download `media-stream-inspector-<version>.zip` from the [latest release](https://github.com/dsilhavy/isobmff-parser-chrome/releases/latest) and unzip it
 2. Open `chrome://extensions` and enable **Developer mode**
 3. **Load unpacked** → select the unzipped folder
 
@@ -35,7 +36,7 @@ npm run build
 ## Use
 
 1. Open DevTools on a page that plays media (e.g. the [dash.js reference player](https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/))
-2. Switch to the **ISOBMFF** panel
+2. Switch to the **Media Stream** panel
 3. Play the stream — init and media segments appear as they are downloaded, grouped by URL template
 
 The header filter matches URL substrings and the keywords `track:N`, `init`, `media`, `gap`, `overlap`, `warn` (structural warnings), `dash` (DASH segment-format warnings), `lmsg` (last segment brand), `enc` (encrypted) and handler codes (`vide`, `soun`, …). Segment groups show the codec string of their init (`avc1.64001F`, `hvc1.2.4.L93.B0`, `mp4a.40.2`, …); segments with warnings (mdat size vs. `trun` sample sizes, missing `tfdt`, parse errors, sample entries without a derivable codec string) carry a `!` with the details in the tooltip.
@@ -53,6 +54,14 @@ Segments are also checked against the ISO BMFF segment formats of ISO/IEC 23009-
 
 Segments with a parse error, and captures without a `moof` or `moov` (e.g. an on-demand `sidx` byte range), are skipped. A `sidx` that documents more bytes than were captured is not reported, as that is what a byte-range request of an on-demand file looks like. `pssh` boxes are named by DRM system (Widevine, PlayReady, FairPlay, ClearKey, Marlin) and list their key IDs (v1 list, Widevine and PlayReady payloads); `tenc` shows the default KID as a UUID. With an init segment selected, the tree header offers a **diff with…** select to compare its decoded fields with another init. A selected `trun` shows sample statistics (Σ duration, bytes, bitrate, fps, sync count, frame types) and per-sample `dts`/`pts`/type; the frame type is read from `mdat` where possible (AVC slice type I/P/B, HEVC `IRAP` vs. undecided, AV1 `KEY`/`INTER`/`INTRA`/`SWITCH` frames and `EXISTING` for `show_existing_frame`); otherwise, and for encrypted tracks, it is the class implied by the sample flags (I / P / B-disposable). Selecting another segment re-opens the same box type.
 
+### Manifest
+
+The **Manifest** tab lists every DASH MPD the page loads, detected by content (`MPD` root element), so the content type does not matter. Each MPD keeps its last 50 distinct versions; identical consecutive refreshes are folded into one row (`×N`). The newest version is followed until you pick an older one.
+
+The middle pane shows the main MPD attributes (type, profiles, durations in seconds, availability start and publish time) and an outline of the elements; clicking an element marks its lines in the syntax-highlighted source on the right. An MPD that is not well-formed XML is flagged with the line of the error. **Save all** adds the captured versions under `mpd/<host>/`.
+
+Not yet covered: schema and conformance checks of the MPD, linking segments to their Representation, and a diff between refreshes. MPDs delivered on a single line are shown as they are (no pretty-printing), and the source view stops at 20,000 lines.
+
 ### DRM / EME
 
 The **DRM** tab shows the EME workflow of the page: every `requestMediaKeySystemAccess`, `createMediaKeys`, `setServerCertificate`, `setMediaKeys`, `createSession`, `generateRequest` / `load` / `update` / `close` / `remove` and `getStatusForPolicy` call with its arguments, result or rejection and duration, plus the `encrypted`, `waitingforkey`, `message`, `keystatuseschange` and `closed` events. Click **Reload & capture EME** first: EME runs in page JavaScript, so the panel reloads the page with a small hook injected before any page script (no extra permissions; the green dot shows the hook is active). Only the top frame is read, so a player inside an iframe shows nothing here. While the hook is active the page can see it: it wraps the EME methods and `EventTarget.prototype.addEventListener` and keeps its log in `window.__emeLog`. A normal reload removes it.
@@ -69,7 +78,7 @@ License messages are matched to the network POST that carried them (by body, els
 
 Not covered: edit-list (`elst`) correction of the A/V offset, hex field maps for most of the added boxes, the optional constraint/sub-layer parts of VVC codec strings, and MPD/m3u8-aware init linking (inits are linked to media segments by longest common URL prefix).
 
-Only requests made while DevTools is open are captured (a limitation of the `chrome.devtools.network` API). Capture starts when DevTools opens, so segments downloaded before the **ISOBMFF** tab is first selected are included (up to the last 200). The panel keeps the last 200 segments and clears them when the page navigates or reloads, unless **Preserve log** is ticked.
+Only requests made while DevTools is open are captured (a limitation of the `chrome.devtools.network` API). Capture starts when DevTools opens, so segments downloaded before the **Media Stream** tab is first selected are included (up to the last 200). The panel keeps the last 200 segments and clears them when the page navigates or reloads, unless **Preserve log** is ticked.
 
 ## Development
 

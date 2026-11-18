@@ -1,5 +1,7 @@
 import { b64ToBytes, isLossyText, textToBytes } from './eme/bytes';
 import { isIsoBmff } from './sniff';
+import { isMpdCandidate, isMpdText } from './mpd/sniff';
+import type { RawMpd } from './mpd/store';
 import type { NetExchange } from './eme/types';
 
 /**
@@ -14,6 +16,7 @@ import type { NetExchange } from './eme/types';
 
 export const MAX_SEGMENTS = 200; // ponytail: fixed FIFO cap, make configurable if sessions need more
 export const MAX_EXCHANGES = 100; // ponytail: FIFO of recent POSTs; only those matched to a license message are shown
+export const MAX_BUFFERED_MPDS = 50; // MPD responses held until the panel connects
 
 export interface RawSegment {
   url: string;
@@ -24,6 +27,7 @@ export interface RawSegment {
 export type CaptureEvent =
   | { type: 'segment'; segment: RawSegment }
   | { type: 'exchange'; exchange: NetExchange }
+  | { type: 'mpd'; mpd: RawMpd }
   | { type: 'navigated'; url: string };
 
 /** Implemented by the panel. */
@@ -39,7 +43,8 @@ export interface Bridge {
 
 // Resource types DevTools reports that never carry a media segment.
 const SKIP_TYPES = new Set(['image', 'font', 'stylesheet', 'script', 'document', 'websocket', 'manifest', 'ping', 'preflight', 'csp-violation-report', 'eventsource']);
-// Textual and image/font MIME types. DevTools delivers textual bodies as text, which the sniffer cannot use anyway.
+// Textual and image/font MIME types. DevTools delivers textual bodies as text, which the segment sniffer cannot use anyway.
+// (MPDs have their own pre-check, `isMpdCandidate`.)
 const SKIP_MIME = /^\s*(text\/|image\/|font\/|application\/(json|javascript|ecmascript|xml|[\w.-]+\+(json|xml))\s*(;|$))/i;
 
 /** Cheap pre-check on request metadata, so the body is only fetched and decoded for plausible segments. */
@@ -54,7 +59,8 @@ export interface Queue extends Bridge {
 }
 
 /** Buffers events until a sink connects (FIFO, capped per kind), then forwards them directly. */
-export function createQueue(limits: { segment: number; exchange: number } = { segment: MAX_SEGMENTS, exchange: MAX_EXCHANGES }): Queue {
+export function createQueue(overrides: Partial<Record<'segment' | 'exchange' | 'mpd', number>> = {}): Queue {
+  const limits = { segment: MAX_SEGMENTS, exchange: MAX_EXCHANGES, mpd: MAX_BUFFERED_MPDS, ...overrides };
   let pending: CaptureEvent[] = [];
   let sink: Sink | null = null;
   let visible = false;
@@ -124,19 +130,19 @@ function exchangeOf(request: HarRequest, content: string | undefined, encoding: 
 }
 
 /**
- * Registers the network listeners. Segment candidates are sniffed for ISOBMFF; every POST
- * is kept as a license / certificate candidate with its request and response bodies.
+ * Registers the network listeners. Segment candidates are sniffed for ISOBMFF, MPD candidates
+ * for an `MPD` root element; every POST is kept as a license / certificate candidate with its
+ * request and response bodies.
  */
 export function startBridge(): Bridge {
   const queue = createQueue();
 
   chrome.devtools.network.onRequestFinished.addListener((request: HarRequest) => {
     const post = request.request.method === 'POST';
-    const candidate = isSegmentCandidate({
-      resourceType: (request as { _resourceType?: string })._resourceType,
-      mimeType: request.response.content.mimeType,
-    });
-    if (!post && !candidate) return;
+    const resourceType = (request as { _resourceType?: string })._resourceType;
+    const candidate = isSegmentCandidate({ resourceType, mimeType: request.response.content.mimeType });
+    const mpd = isMpdCandidate({ resourceType, mimeType: request.response.content.mimeType, url: request.request.url });
+    if (!post && !candidate && !mpd) return;
 
     request.getContent((content, encoding) => {
       let bytes: Uint8Array<ArrayBuffer> | undefined;
@@ -148,6 +154,11 @@ export function startBridge(): Bridge {
         }
       }
       if (post) queue.push({ type: 'exchange', exchange: exchangeOf(request, content, encoding, bytes) });
+      if (mpd && content) {
+        // DevTools hands XML over as text, or as base64 when it does not recognise the content type
+        const text = encoding === 'base64' ? (bytes ? new TextDecoder().decode(bytes) : '') : content;
+        if (isMpdText(text)) queue.push({ type: 'mpd', mpd: { url: request.request.url, time: Date.now(), text, status: request.response.status } });
+      }
       if (candidate && bytes && isIsoBmff(bytes)) {
         queue.push({ type: 'segment', segment: { url: request.request.url, time: Date.now(), bytes } });
       }
