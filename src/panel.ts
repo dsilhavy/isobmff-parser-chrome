@@ -313,7 +313,7 @@ function refreshDrm(): void {
   emeModel = buildModel(emeEvents, exchanges, segmentKids(segments));
   const n = renderDrmList(drmFlowEl, emeModel, drmSelected, drmFilter, drmHandlers);
   countEl.textContent = `${emeModel.items.length} EME item${emeModel.items.length === 1 ? '' : 's'} · ${emeModel.sessions.length} session${emeModel.sessions.length === 1 ? '' : 's'}`;
-  drmEmptyEl.textContent = emeModel.items.length ? 'No EME items match the filter.' : armed ? 'Hook active — waiting for EME calls…' : 'Not capturing. Click “Reload & capture EME”.';
+  drmEmptyEl.textContent = emeModel.items.length ? 'No EME items match the filter.' : armed ? 'Hook active — waiting for EME calls…' : 'Not capturing: the EME hook is not attached to this page.';
   drmEmptyEl.style.display = n ? 'none' : '';
   const sel = emeModel.items.find((i) => i.id === drmSelected);
   if (drmSelected !== null && !sel) drmSelected = null;
@@ -338,7 +338,9 @@ function updateViewButtons(): void {
   reportBtn.textContent = n.error + n.warning ? `Report · ${n.error + n.warning}` : 'Report';
   reportBtn.classList.toggle('has-errors', n.error > 0);
   armDotEl.classList.toggle('on', armed);
-  armEl.title = armed ? 'EME hook active on this page. Click to reload and start a fresh capture.' : 'Reloads the page with a hook that records EME calls before any page script runs';
+  armEl.title = armed
+    ? 'EME calls are recorded automatically. Reload to capture from the first page script, if the start of a session is missing.'
+    : 'Reloads the page with a hook that records EME calls before any page script runs';
 }
 
 function setView(v: View): void {

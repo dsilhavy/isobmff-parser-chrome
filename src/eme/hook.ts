@@ -1,10 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 /**
- * Runs in the inspected page's main world, before page scripts, via
- * `chrome.devtools.inspectedWindow.reload({ injectedScript })`. It is serialised
- * with Function#toString, so it must not reference anything outside its own body
- * (no imports, no module-level helpers).
+ * Runs in the inspected page's main world. The DevTools page injects it with
+ * `chrome.devtools.inspectedWindow.eval` when DevTools opens and after each navigation
+ * (so it may attach to a page that is already running), or before any page script via
+ * `inspectedWindow.reload({ injectedScript })`. It is serialised with Function#toString,
+ * so it must not reference anything outside its own body (no imports, no module-level helpers).
  *
  * Wraps the EME API and records calls, results and events into `window.__emeLog`,
  * which the panel drains by polling. Binary data is copied to base64 at call time
@@ -72,10 +73,15 @@ export function installEmeHook(): void {
     return e;
   };
 
-  const wrap = (proto: any, name: string, prefix: string | null, onResult?: (value: any, self: any) => any) => {
+  const wrap = (proto: any, name: string, prefix: string | null, onResult?: (value: any, self: any) => any, before?: (self: any) => void) => {
     const orig = proto?.[name];
     if (typeof orig !== 'function' || orig.__emeWrapped) return;
     const wrapped = function (this: any, ...args: any[]) {
+      try {
+        before?.(this);
+      } catch {
+        /* never break the page's call */
+      }
       const target = prefix && this && typeof this === 'object' ? idOf(this, prefix) : undefined;
       const call = push({ kind: 'call', name, target, args: args.map((a) => ser(a)) });
       const fail = (e: any) => push({ kind: 'error', name, target, callId: call.seq, error: { name: e?.name ?? 'Error', message: e?.message ?? String(e) } });
@@ -162,7 +168,8 @@ export function installEmeHook(): void {
   wrap(w.MediaKeys?.prototype, 'setServerCertificate', 'MediaKeys');
   wrap(w.MediaKeys?.prototype, 'getStatusForPolicy', 'MediaKeys');
   const sessionResult = (v: any, self: any) => ({ value: ser(v), sessionId: self?.sessionId });
-  for (const m of ['generateRequest', 'load', 'update', 'close', 'remove']) wrap(w.MediaKeySession?.prototype, m, 'Session', sessionResult);
+  // `watchSession` on every call: a session created before the hook was attached is picked up at its next call
+  for (const m of ['generateRequest', 'load', 'update', 'close', 'remove']) wrap(w.MediaKeySession?.prototype, m, 'Session', sessionResult, watchSession);
   wrap(w.HTMLMediaElement?.prototype, 'setMediaKeys', 'Media', (v, self) => {
     watchMedia(self);
     return ser(v);
@@ -183,7 +190,9 @@ export function installEmeHook(): void {
   }
 
   const instance = Math.random().toString(36).slice(2);
-  push({ kind: 'event', name: 'hook installed', value: { url: w.location?.href, userAgent: w.navigator?.userAgent } });
+  // `late`: the document was past parsing when the hook attached, so earlier EME calls may be missing
+  const late = !!w.document && w.document.readyState !== 'loading';
+  push({ kind: 'event', name: 'hook installed', value: { url: w.location?.href, userAgent: w.navigator?.userAgent, late } });
   Object.defineProperty(w, '__emeLog', {
     value: { instance, drain: (after: number) => log.filter((e) => e.seq > after) },
     configurable: true,

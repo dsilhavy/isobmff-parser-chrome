@@ -74,7 +74,7 @@ function summaryOf(item: FlowItem): string {
     case 'closed':
       return String(field(item.value, 'reason') ?? '');
     case 'hook installed':
-      return String(field(item.value, 'url') ?? '');
+      return `${String(field(item.value, 'url') ?? '')}${field(item.value, 'late') ? ' · attached to a running page, earlier EME calls are not recorded' : ''}`;
     default:
       return [p?.parsed.title, size, item.exchange ? `HTTP ${item.exchange.status}` : ''].filter(Boolean).join(' · ');
   }
@@ -345,7 +345,7 @@ function overview(container: HTMLElement, hexEl: HTMLElement, model: EmeModel, a
         'muted',
         armed
           ? 'Hook active, no EME calls yet. Start playback of a protected stream.'
-          : 'EME calls are only visible when the page runs with the hook. Click “Reload & capture EME”: the page reloads with the hook injected before any page script.',
+          : 'The EME hook could not be attached to this page. “Reload & capture EME” reloads it with the hook injected before any page script.',
       ),
     );
   }
