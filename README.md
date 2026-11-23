@@ -37,7 +37,7 @@ npm run build
 ## Use
 
 1. Open DevTools on a page that plays media (e.g. the [dash.js reference player](https://reference.dashif.org/dash.js/latest/samples/dash-if-reference-player/))
-2. Switch to the **Media Stream** panel
+2. Switch to the **Media Stream Inspector** panel
 3. Play the stream — init and media segments appear as they are downloaded, grouped by URL template
 
 The header filter matches URL substrings and the keywords `track:N`, `init`, `media`, `gap`, `overlap`, `warn` (structural warnings), `dash` (DASH segment-format warnings), `lmsg` (last segment brand), `enc` (encrypted) and handler codes (`vide`, `soun`, …). Segment groups show the codec string of their init (`avc1.64001F`, `hvc1.2.4.L93.B0`, `mp4a.40.2`, …); segments with warnings (mdat size vs. `trun` sample sizes, missing `tfdt`, parse errors, sample entries without a derivable codec string) carry a `!` with the details in the tooltip.
@@ -71,7 +71,7 @@ Each finding has a rule id, a severity (`error` for a "shall" of the specificati
 
 ### DRM / EME
 
-The **DRM** tab shows the EME workflow of the page: every `requestMediaKeySystemAccess`, `createMediaKeys`, `setServerCertificate`, `setMediaKeys`, `createSession`, `generateRequest` / `load` / `update` / `close` / `remove` and `getStatusForPolicy` call with its arguments, result or rejection and duration, plus the `encrypted`, `waitingforkey`, `message`, `keystatuseschange` and `closed` events. Click **Reload & capture EME** first: EME runs in page JavaScript, so the panel reloads the page with a small hook injected before any page script (no extra permissions; the green dot shows the hook is active). Only the top frame is read, so a player inside an iframe shows nothing here. While the hook is active the page can see it: it wraps the EME methods and `EventTarget.prototype.addEventListener` and keeps its log in `window.__emeLog`. A normal reload removes it.
+The **DRM** tab shows the EME workflow of the page: every `requestMediaKeySystemAccess`, `createMediaKeys`, `setServerCertificate`, `setMediaKeys`, `createSession`, `generateRequest` / `load` / `update` / `close` / `remove` and `getStatusForPolicy` call with its arguments, result or rejection and duration, plus the `encrypted`, `waitingforkey`, `message`, `keystatuseschange` and `closed` events. No reload is needed: EME runs in page JavaScript, so the extension attaches a small hook to the page when DevTools opens and again after every navigation (no extra permissions; the green dot shows the hook is active). As with segments, only what happens while DevTools is open is recorded. If DevTools is opened during playback, calls are logged from then on; a session that already exists appears at its next call, and its earlier license exchange is missing. **Reload & capture EME** reloads the page with the hook injected before any page script, for a capture that is complete from the start. Only the top frame is read, so a player inside an iframe shows nothing here. While the hook is active the page can see it: it wraps the EME methods and `EventTarget.prototype.addEventListener` and keeps its log in `window.__emeLog`. It stays until DevTools is closed and the page is reloaded.
 
 Payloads are decoded per key system:
 
@@ -85,7 +85,7 @@ License messages are matched to the network POST that carried them (by body, els
 
 Not covered: edit-list (`elst`) correction of the A/V offset, hex field maps for most of the added boxes, the optional constraint/sub-layer parts of VVC codec strings, and MPD/m3u8-aware init linking (inits are linked to media segments by longest common URL prefix).
 
-Only requests made while DevTools is open are captured (a limitation of the `chrome.devtools.network` API). Capture starts when DevTools opens, so segments downloaded before the **Media Stream** tab is first selected are included (up to the last 200). The panel keeps the last 200 segments and clears them when the page navigates or reloads, unless **Preserve log** is ticked.
+Only requests made while DevTools is open are captured (a limitation of the `chrome.devtools.network` API). Capture starts when DevTools opens, so segments downloaded before the **Media Stream Inspector** tab is first selected are included (up to the last 200). The panel keeps the last 200 segments and clears them when the page navigates or reloads, unless **Preserve log** is ticked.
 
 ## Development
 

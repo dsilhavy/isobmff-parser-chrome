@@ -246,3 +246,17 @@ test('exportLog keeps only matched license exchanges and redacts credential head
   assert.ok(!JSON.stringify(out).includes('hunter2'));
   assert.deepEqual(redactHeaders([{ name: 'X-Api-Key', value: 'k' }]), [{ name: 'X-Api-Key', value: '[redacted]' }]);
 });
+
+test('hook attached to a running page picks up an existing session at its next call', async () => {
+  new Function(hookSource())(); // idempotent: a second injection keeps the first hook
+  const before: RawEvent[] = g.__emeLog.drain(0);
+  assert.equal(before.filter((e) => e.name === 'hook installed').length, 1);
+  const last = before[before.length - 1].seq;
+
+  const session = new MediaKeySession(); // not created through the wrapped createSession: it predates the hook
+  await session.update(LICENSE);
+  await tick();
+
+  const fresh: RawEvent[] = g.__emeLog.drain(last);
+  assert.deepEqual(fresh.map((e) => `${e.kind}:${e.name}`).sort(), ['call:update', 'event:keystatuseschange', 'result:update']);
+});

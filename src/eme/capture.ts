@@ -2,9 +2,17 @@ import { hookSource } from './hook';
 import type { RawEvent } from './types';
 
 const POLL_MS = 500; // hook present, or expected after a reload
-const IDLE_POLL_MS = 2000; // panel visible, page has no hook
+const IDLE_POLL_MS = 2000; // panel visible, hook could not be attached (e.g. a page DevTools cannot evaluate in)
 const HIDDEN_POLL_MS = 5000; // panel hidden, hook present: keep draining so the page-side log does not overflow
 const EXPECT_MS = 15_000;
+
+/**
+ * Attaches the EME hook to the page as it is now, without a reload. The hook is idempotent,
+ * so calling this again on a hooked page does nothing. Calls made before it attached are lost.
+ */
+export function injectHook(): void {
+  chrome.devtools.inspectedWindow.eval(hookSource(), () => void chrome.runtime.lastError);
+}
 
 /** Reloads the inspected page with the EME hook injected before any page script. */
 export function armHook(): void {
@@ -25,7 +33,8 @@ export interface EmePoller {
 }
 
 /**
- * Polls `window.__emeLog` of the top frame. `onBatch(events, reset)` gets new events;
+ * Polls `window.__emeLog` of the top frame and attaches the hook when the page has none.
+ * `onBatch(events, reset)` gets new events;
  * `reset` is true when a new hooked page (another hook instance) replaced the old one.
  * `onArmed` reports whether the current page has the hook.
  */
@@ -46,6 +55,7 @@ export function startEmePolling(onBatch: (events: RawEvent[], reset: boolean) =>
   };
   const handle = (result: { instance: string; events: RawEvent[] } | null, failed: boolean) => {
     const ok = !failed && !!result;
+    if (!failed && !result) injectHook(); // page without hook (injection raced a navigation): attach now, the next poll finds it
     if (ok !== armed) onArmed((armed = ok));
     if (!ok || !result) return;
     const reset = result.instance !== instance;
